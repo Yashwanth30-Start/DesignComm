@@ -10,3 +10,4 @@ export * from "./Tag";
 export * from "./SectionHeading";
 export * from "./PanelSchedule";
 export * from "./GrainOverlay";
+export * from "./Marquee";

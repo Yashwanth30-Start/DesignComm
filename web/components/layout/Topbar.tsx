@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { GlobalSearch } from "@/features/search/GlobalSearch";
+import { ConnectDataButton } from "@/features/data/ConnectDataButton";
 import { BackButton } from "./BackButton";
 
 export function Topbar({ breadcrumb }: { breadcrumb?: ReactNode }) {
@@ -9,8 +10,9 @@ export function Topbar({ breadcrumb }: { breadcrumb?: ReactNode }) {
       <div className="text-sm font-semibold tracking-tight text-ink">
         Commission<span className="text-cyan">OS</span>
       </div>
-      {breadcrumb && <div className="text-xs text-ink-dim">{breadcrumb}</div>}
+      {breadcrumb && <div className="hidden text-xs text-ink-dim sm:block">{breadcrumb}</div>}
       <GlobalSearch />
+      <ConnectDataButton />
     </header>
   );
 }

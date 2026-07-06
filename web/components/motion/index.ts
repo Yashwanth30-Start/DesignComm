@@ -6,3 +6,4 @@ export * from "./MagneticButton";
 export * from "./ScrollSectionStage";
 export * from "./ScrollProgressRail";
 export * from "./SpotlightCursor";
+export * from "./PinnedChapter";

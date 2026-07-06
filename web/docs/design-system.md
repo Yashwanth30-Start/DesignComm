@@ -24,8 +24,8 @@ Ported from the legacy `commissionos-fixed.html` dark-glass-neon language and ex
 
 ## Component catalog
 
-- **`components/ui`** — Button, GlassPanel, StatusPill, SectionHeading, Divider, IconTile, StatTile, Timeline, ProgressBar, Tag, PanelSchedule, GrainOverlay. Pure presentational primitives; no data fetching.
-- **`components/motion`** — Reveal, StaggerGroup/StaggerItem, Parallax, GlowPulse, MagneticButton, ScrollSectionStage, ScrollProgressRail, SpotlightCursor. Wrap Motion (`motion/react`) so pages never import Motion directly.
+- **`components/ui`** — Button, GlassPanel, StatusPill, SectionHeading, Divider, IconTile, StatTile, Timeline, ProgressBar, Tag, PanelSchedule, GrainOverlay, Marquee. Pure presentational primitives; no data fetching.
+- **`components/motion`** — Reveal, StaggerGroup/StaggerItem, Parallax, GlowPulse, MagneticButton, ScrollSectionStage, ScrollProgressRail, SpotlightCursor, PinnedChapter. Wrap Motion (`motion/react`) so pages never import Motion directly. `PinnedChapter` is the Editions-style pattern: viewport locks while scroll progress (a MotionValue) drives the chapter's animation via a render-prop — pass progress into a child *component* (not inline hooks in the render-prop) so rules-of-hooks hold.
 - **`components/three`** — CanvasStage, ParticleField, ElectricalGridFloor, AmbientScene. Client-only, mount-gated to avoid SSR/hydration mismatches. `AmbientScene` is the one thing pages actually import.
 - **`components/layout`** — NavRail, Topbar, PageShell. The app chrome for real product screens (not used on the cinematic landing page, which is deliberately chrome-free). `Topbar` renders `features/search/GlobalSearch` for the working global search.
 - **`GrainOverlay`** is mounted once, globally, in `app/layout.tsx` — every screen gets the same subtle film-grain texture; don't add a second one per-page.

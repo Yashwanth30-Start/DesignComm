@@ -4,6 +4,10 @@ Next.js 14 + TypeScript + Tailwind + Motion + React Three Fiber. This is the rea
 
 **Only ever upload the contents of this `web` folder to GitHub.** Never upload `../pipeline/` or `../Claude_Code/` — those contain real, confidential project data and this site is public with no login. See `../pipeline/README.md`.
 
+## Searching your real data (without exposing it)
+
+The deployed site never contains project data — but it can *read* it locally. On any app page (Assets, Panels, or an asset detail), click **Connect data** in the top bar and select the JSON files from `../pipeline/output/` (`panel-schedules.json`, `rfis.json`, `constraints.json`, `groupme.json`, `trackers.json`, `airtable.json` — you can select all six at once). They load into the browser's IndexedDB on your machine only; nothing is uploaded anywhere. From then on, the global search returns every Asset #, Equipment ID, panel, circuit, RFI number, constraint, and GroupMe message from your real exports — clicking a result opens a drawer with all of that record's source fields. The import persists across visits on the same browser; the ✕ next to the record count clears it. Re-run `../pipeline/run-all.ps1` after new exports land, then re-import.
+
 ## Why there's no `npm install` step here
 
 This is built and run on a locked-down work laptop with no Node, npm, or git, and no install permissions. So the build doesn't happen locally — it happens in the cloud, on Netlify's build servers, which already have Node. Nothing gets installed on this machine at any point.

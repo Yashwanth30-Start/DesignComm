@@ -69,7 +69,7 @@ export interface NormalizedRecord {
   sourceRecordId: string;
   sourcePath: string;
   sourceSheet?: string;
-  recordType: RecordType;
+  recordType: RecordType | string;
   primaryLabel: string;
   secondaryLabel?: string;
   status?: string;
@@ -80,6 +80,10 @@ export interface NormalizedRecord {
   panelKeys: string[];
   circuitKeys: string[];
   rfiKeys: string[];
+  /** Pre-lowercased haystack emitted by the pipeline; used for client search. */
+  searchText?: string;
+  /** Original source fields, shape varies per source. */
+  raw?: Record<string, unknown> | null;
 }
 
 export interface Constraint {
