@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Layers, Boxes } from "lucide-react";
+import { Search, Layers, Boxes, Zap } from "lucide-react";
 
 import { StatusPill } from "@/components/ui";
 import { cn } from "@/utils/cn";
-import { MOCK_ASSETS, MOCK_PANEL_SCHEDULES } from "@/lib/mock-data";
+import { MOCK_ASSETS, MOCK_PANEL_SCHEDULES, getAssetsByPanel } from "@/lib/mock-data";
 
 interface AssetResult {
   kind: "asset";
@@ -19,11 +19,21 @@ interface AssetResult {
 interface PanelResult {
   kind: "panel";
   id: string;
+  panelId: string;
   title: string;
   subtitle: string;
 }
 
-type Result = AssetResult | PanelResult;
+interface CircuitResult {
+  kind: "circuit";
+  id: string;
+  panelId: string;
+  circuit: string;
+  title: string;
+  subtitle: string;
+}
+
+type Result = AssetResult | PanelResult | CircuitResult;
 
 function matchAssets(query: string): AssetResult[] {
   const q = query.toLowerCase();
@@ -47,10 +57,32 @@ function matchPanels(query: string): PanelResult[] {
     (panel) => ({
       kind: "panel" as const,
       id: panel.panelId,
+      panelId: panel.panelId,
       title: panel.panelName,
-      subtitle: panel.panelId,
+      subtitle: `${panel.panelId} · ${getAssetsByPanel(panel.panelId).length} asset(s) fed from this panel`,
     })
   );
+}
+
+function matchCircuits(query: string): CircuitResult[] {
+  const q = query.toLowerCase();
+  const results: CircuitResult[] = [];
+  for (const panel of MOCK_PANEL_SCHEDULES) {
+    for (const circuit of panel.circuits) {
+      const haystack = `${circuit.circuit} ${circuit.description} ${circuit.load} ${circuit.status} ${panel.panelId} ${panel.panelName}`;
+      if (haystack.toLowerCase().includes(q)) {
+        results.push({
+          kind: "circuit",
+          id: `${panel.panelId}-${circuit.circuit}`,
+          panelId: panel.panelId,
+          circuit: circuit.circuit,
+          title: `${panel.panelName} — CKT ${circuit.circuit}`,
+          subtitle: `${circuit.description} · ${circuit.status}`,
+        });
+      }
+    }
+  }
+  return results;
 }
 
 export function GlobalSearch() {
@@ -61,7 +93,7 @@ export function GlobalSearch() {
 
   const results = useMemo<Result[]>(() => {
     if (query.trim().length === 0) return [];
-    return [...matchAssets(query), ...matchPanels(query)].slice(0, 8);
+    return [...matchAssets(query), ...matchPanels(query), ...matchCircuits(query)].slice(0, 10);
   }, [query]);
 
   useEffect(() => {
@@ -84,7 +116,13 @@ export function GlobalSearch() {
   function goTo(result: Result) {
     setOpen(false);
     setQuery("");
-    router.push(result.kind === "asset" ? `/assets/${result.id}` : `/panels/${encodeURIComponent(result.id)}`);
+    if (result.kind === "asset") {
+      router.push(`/assets/${result.id}`);
+    } else if (result.kind === "panel") {
+      router.push(`/panels/${encodeURIComponent(result.panelId)}`);
+    } else {
+      router.push(`/panels/${encodeURIComponent(result.panelId)}?highlight=${encodeURIComponent(result.circuit)}`);
+    }
   }
 
   return (
@@ -107,22 +145,19 @@ export function GlobalSearch() {
         <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-96 overflow-y-auto rounded-md border border-glass-border-hi bg-void/95 p-1.5 shadow-glass backdrop-blur-xs">
           {results.length === 0 && (
             <div className="px-3 py-4 text-center text-xs text-ink-dim">
-              No matches for &quot;{query}&quot; in the current mock dataset.
+              No matches for &quot;{query}&quot; in the current mock dataset ({MOCK_ASSETS.length} assets,{" "}
+              {MOCK_PANEL_SCHEDULES.length} panels).
             </div>
           )}
           {results.map((result) => (
             <button
               key={`${result.kind}-${result.id}`}
               onClick={() => goTo(result)}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-xs transition-colors hover:bg-glass-hi"
-              )}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-xs transition-colors hover:bg-glass-hi"
             >
-              {result.kind === "asset" ? (
-                <Layers className="h-3.5 w-3.5 shrink-0 text-cyan" />
-              ) : (
-                <Boxes className="h-3.5 w-3.5 shrink-0 text-purple" />
-              )}
+              {result.kind === "asset" && <Layers className="h-3.5 w-3.5 shrink-0 text-cyan" />}
+              {result.kind === "panel" && <Boxes className="h-3.5 w-3.5 shrink-0 text-purple" />}
+              {result.kind === "circuit" && <Zap className="h-3.5 w-3.5 shrink-0 text-gold" />}
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium text-ink">{result.title}</div>
                 <div className="truncate text-[10px] text-ink-dim">{result.subtitle}</div>

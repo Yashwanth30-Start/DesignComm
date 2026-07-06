@@ -14,7 +14,13 @@ export function generateMetadata({ params }: { params: { panelId: string } }): M
   return { title: schedule ? `${schedule.panelName} — CommissionOS` : "Panel not found — CommissionOS" };
 }
 
-export default function PanelPage({ params }: { params: { panelId: string } }) {
+export default function PanelPage({
+  params,
+  searchParams,
+}: {
+  params: { panelId: string };
+  searchParams: { highlight?: string };
+}) {
   const panelId = decodeURIComponent(params.panelId);
   const schedule = getPanelSchedule(panelId);
   if (!schedule) notFound();
@@ -22,7 +28,7 @@ export default function PanelPage({ params }: { params: { panelId: string } }) {
 
   return (
     <PageShell breadcrumb={<span>Panels / {schedule.panelName}</span>}>
-      <PanelDetailView schedule={schedule} assetsOnPanel={assetsOnPanel} />
+      <PanelDetailView schedule={schedule} assetsOnPanel={assetsOnPanel} highlightCircuit={searchParams.highlight} />
     </PageShell>
   );
 }

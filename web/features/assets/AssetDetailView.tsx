@@ -63,8 +63,17 @@ export function AssetDetailView({
       {panelSchedule && (
         <Reveal delay={0.2}>
           <section className="mt-10">
-            <SectionHeading eyebrow="Source: SharePoint" title="Panel Schedule" />
-            <PanelSchedule schedule={panelSchedule} highlightCircuit={asset.circuit} className="mt-5" />
+            <SectionHeading
+              eyebrow="Source: SharePoint"
+              title="Panel Schedule"
+              description={`Fed from ${panelSchedule.panelName} (${panelSchedule.panelId}) — CKT ${asset.circuit} is highlighted below.`}
+            />
+            <PanelSchedule
+              schedule={panelSchedule}
+              highlightCircuit={asset.circuit}
+              linkedAssets={{ [asset.circuit]: { id: asset.id, name: asset.name, status: asset.status } }}
+              className="mt-5"
+            />
           </section>
         </Reveal>
       )}

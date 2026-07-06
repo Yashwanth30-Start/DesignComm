@@ -1,19 +1,32 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { Link2 } from "lucide-react";
 
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-import { GlassPanel, SectionHeading, StatusPill, PanelSchedule } from "@/components/ui";
+import { GlassPanel, SectionHeading, StatusPill, PanelSchedule, type LinkedAsset } from "@/components/ui";
 import type { Asset, PanelScheduleData } from "@/types/domain";
 
 export function PanelDetailView({
   schedule,
   assetsOnPanel,
+  highlightCircuit,
 }: {
   schedule: PanelScheduleData;
   assetsOnPanel: Asset[];
+  highlightCircuit?: string;
 }) {
+  const linkedAssets = assetsOnPanel.reduce<Record<string, LinkedAsset>>((map, asset) => {
+    map[asset.circuit] = { id: asset.id, name: asset.name, status: asset.status };
+    return map;
+  }, {});
+
+  useEffect(() => {
+    if (!highlightCircuit) return;
+    document.getElementById(`ckt-${highlightCircuit}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightCircuit]);
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
       <Reveal>
@@ -23,7 +36,12 @@ export function PanelDetailView({
       </Reveal>
 
       <Reveal delay={0.1}>
-        <PanelSchedule schedule={schedule} className="mt-10" />
+        <PanelSchedule
+          schedule={schedule}
+          highlightCircuit={highlightCircuit}
+          linkedAssets={linkedAssets}
+          className="mt-10"
+        />
       </Reveal>
 
       <Reveal delay={0.15}>
