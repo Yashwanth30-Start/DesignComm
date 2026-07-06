@@ -5,3 +5,4 @@ export * from "./GlowPulse";
 export * from "./MagneticButton";
 export * from "./ScrollSectionStage";
 export * from "./ScrollProgressRail";
+export * from "./SpotlightCursor";

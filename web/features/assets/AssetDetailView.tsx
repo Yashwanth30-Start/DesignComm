@@ -11,10 +11,16 @@ import {
 } from "lucide-react";
 
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-import { GlassPanel, SectionHeading, StatusPill, Tag, Timeline, Divider } from "@/components/ui";
-import type { Asset } from "@/types/domain";
+import { GlassPanel, SectionHeading, StatusPill, Tag, Timeline, Divider, PanelSchedule } from "@/components/ui";
+import type { Asset, PanelScheduleData } from "@/types/domain";
 
-export function AssetDetailView({ asset }: { asset: Asset }) {
+export function AssetDetailView({
+  asset,
+  panelSchedule,
+}: {
+  asset: Asset;
+  panelSchedule?: PanelScheduleData;
+}) {
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <Reveal>
@@ -53,6 +59,15 @@ export function AssetDetailView({ asset }: { asset: Asset }) {
           </GlassPanel>
         </div>
       </Reveal>
+
+      {panelSchedule && (
+        <Reveal delay={0.2}>
+          <section className="mt-10">
+            <SectionHeading eyebrow="Source: SharePoint" title="Panel Schedule" />
+            <PanelSchedule schedule={panelSchedule} highlightCircuit={asset.circuit} className="mt-5" />
+          </section>
+        </Reveal>
+      )}
 
       <div className="mt-14 grid grid-cols-1 gap-10 lg:grid-cols-3">
         <div className="space-y-10 lg:col-span-2">

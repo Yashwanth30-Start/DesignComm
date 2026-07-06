@@ -19,6 +19,21 @@ export interface TimelineStage {
   note?: string;
 }
 
+export type CircuitStatus = "energized" | "de-energized" | "blocked" | "spare";
+
+export interface PanelCircuitRow {
+  circuit: string;
+  description: string;
+  load: string;
+  status: CircuitStatus;
+}
+
+export interface PanelScheduleData {
+  panelId: string;
+  panelName: string;
+  circuits: PanelCircuitRow[];
+}
+
 export type IntegrationSourceId =
   | "sharepoint-panel-schedules"
   | "procore-rfis"

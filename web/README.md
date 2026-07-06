@@ -2,20 +2,30 @@
 
 Next.js 14 + TypeScript + Tailwind + Motion + React Three Fiber. This is the real CommissionOS product: a design system, a reusable component library, a cinematic scroll landing page, and the first Asset Detail Page. It renders typed mock data (`lib/mock-data.ts`) — no live integrations yet, by design (see `../docs/integration-contract.md`).
 
+**Only ever upload the contents of this `web` folder to GitHub.** Never upload `../pipeline/` or `../Claude_Code/` — those contain real, confidential project data and this site is public with no login. See `../pipeline/README.md`.
+
 ## Why there's no `npm install` step here
 
 This is built and run on a locked-down work laptop with no Node, npm, or git, and no install permissions. So the build doesn't happen locally — it happens in the cloud, on Netlify's build servers, which already have Node. Nothing gets installed on this machine at any point.
 
 ## Deploying (no local install, no git CLI)
 
-1. **Create a GitHub repo** (recommend private) at github.com — "Add file → Upload files."
-2. Open this `web` folder in File Explorer, select everything **inside** it (`app/`, `components/`, `package.json`, etc. — not the `web` folder itself), and drag it into GitHub's upload page. GitHub's web uploader preserves folder structure. `node_modules`, `.next`, and `.env*` are already excluded via `.gitignore` (GitHub's uploader won't see them since they don't exist locally anyway).
-3. Commit directly to `main` from the GitHub web UI.
-4. Go to **netlify.com → Add new site → Import an existing project → Deploy with GitHub**, authorize GitHub, pick the repo.
-5. Netlify auto-detects Next.js via `netlify.toml` (build command `npm run build`, `@netlify/plugin-nextjs`). Click **Deploy**. First build takes a few minutes while Netlify installs dependencies in the cloud.
-6. Every time you want to update the site: edit files here, re-upload the changed files to GitHub (or use GitHub's web editor for small tweaks), and Netlify redeploys automatically on push.
+There are two valid repo shapes. Pick whichever matches what you already have — **you do not need to re-upload anything you've already pushed.**
 
-If a build fails, open the failed deploy in Netlify and copy the log — the error will point at a specific file/line, which is the fastest way to get it fixed.
+**Shape A — `web/` sits inside the repo as a subfolder** (this is what happens if you drag the whole `web` folder into GitHub's uploader instead of its contents — the most common outcome):
+1. Add one file at the **repo root** (next to the `web` folder, not inside it): `../netlify.toml` from this project — it contains `base = "web"`, which tells Netlify to treat `web/` as the project root for the build. Use GitHub's "Add file → Upload files" and drop it at the repo root.
+2. Delete `web/netlify.toml` from the repo if GitHub still has an old copy there (there should only be one `netlify.toml`, at the repo root).
+3. In Netlify: **Site configuration → Build & deploy → Trigger deploy → Clear cache and deploy site.**
+
+**Shape B — contents of `web/` sit directly at the repo root** (package.json, app/, components/ visible immediately in the repo's root file listing):
+1. Use `web/netlify.toml`-equivalent config at the repo root directly (no `base` needed) — i.e. the root `netlify.toml` should NOT have `base = "web"` in this case.
+2. Everything else is the same.
+
+If you're not sure which shape you have, open the repo on github.com — if the root file listing shows a `web` folder, you're in Shape A.
+
+Once the correct `netlify.toml` is in place and a fresh deploy runs, you should see real build output in the Netlify log: `npm install` pulling ~15 packages (several seconds, not instant), then `next build` compiling routes. If the log still says `Detected 0 framework(s)` / `No build steps found`, the `netlify.toml` still isn't where Netlify expects it — double check it's at the true repo root and not nested.
+
+If a build fails after that, open the failed deploy in Netlify and copy the log — the error will point at a specific file/line, which is the fastest way to get it fixed.
 
 ### Faster iteration option
 

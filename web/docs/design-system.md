@@ -24,10 +24,11 @@ Ported from the legacy `commissionos-fixed.html` dark-glass-neon language and ex
 
 ## Component catalog
 
-- **`components/ui`** — Button, GlassPanel, StatusPill, SectionHeading, Divider, IconTile, StatTile, Timeline, ProgressBar, Tag. Pure presentational primitives; no data fetching.
-- **`components/motion`** — Reveal, StaggerGroup/StaggerItem, Parallax, GlowPulse, MagneticButton, ScrollSectionStage, ScrollProgressRail. Wrap Motion (`motion/react`) so pages never import Motion directly.
+- **`components/ui`** — Button, GlassPanel, StatusPill, SectionHeading, Divider, IconTile, StatTile, Timeline, ProgressBar, Tag, PanelSchedule, GrainOverlay. Pure presentational primitives; no data fetching.
+- **`components/motion`** — Reveal, StaggerGroup/StaggerItem, Parallax, GlowPulse, MagneticButton, ScrollSectionStage, ScrollProgressRail, SpotlightCursor. Wrap Motion (`motion/react`) so pages never import Motion directly.
 - **`components/three`** — CanvasStage, ParticleField, ElectricalGridFloor, AmbientScene. Client-only, mount-gated to avoid SSR/hydration mismatches. `AmbientScene` is the one thing pages actually import.
-- **`components/layout`** — NavRail, Topbar, PageShell. The app chrome for real product screens (not used on the cinematic landing page, which is deliberately chrome-free).
+- **`components/layout`** — NavRail, Topbar, PageShell. The app chrome for real product screens (not used on the cinematic landing page, which is deliberately chrome-free). `Topbar` renders `features/search/GlobalSearch` for the working global search.
+- **`GrainOverlay`** is mounted once, globally, in `app/layout.tsx` — every screen gets the same subtle film-grain texture; don't add a second one per-page.
 
 ## Rules
 
@@ -35,3 +36,4 @@ Ported from the legacy `commissionos-fixed.html` dark-glass-neon language and ex
 2. Pages never import `motion/react` or `three`/`@react-three/fiber` directly — go through `components/motion` / `components/three`.
 3. Every status badge is `StatusPill`, driven by the `WorkflowStatus` type in `types/domain.ts` — never a one-off colored `<span>`.
 4. New domain data shapes extend `types/domain.ts` first, then get a mock fixture in `lib/mock-data.ts`, then a component. Data model before UI, always.
+5. Any panel/circuit table renders through `PanelSchedule` (`components/ui/PanelSchedule.tsx`) — a single straightforward grid layout driven by `PanelScheduleData`. Do not hand-roll a second table for panel schedules anywhere else in the app; extend this one component if a new view needs it to behave differently.
