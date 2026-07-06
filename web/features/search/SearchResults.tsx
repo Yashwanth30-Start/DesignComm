@@ -1,34 +1,50 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Layers, Boxes, Database } from "lucide-react";
+import { Layers, Boxes, Zap, AlertTriangle, CircleCheck } from "lucide-react";
 
-import { GlassPanel, SectionHeading, StatusPill, Tabs, Tag, type TabDef } from "@/components/ui";
+import { GlassPanel, SectionHeading, StatusPill, Tag } from "@/components/ui";
 import type { NormalizedRecord } from "@/types/domain";
 import { useProjectData } from "@/features/data/DataProvider";
 import { MOCK_ASSETS, MOCK_PANEL_SCHEDULES } from "@/lib/mock-data";
+import { LivePanelSchedule, type LiveCircuit } from "./LivePanelSchedule";
+import { cn } from "@/utils/cn";
 
-// Tab order mirrors the field workflow sketch: inspection scheduling first,
-// then the electrical chain (panel schedule -> energization chat -> facility
-// grid), then TCO/testing, equipment master, and finally open items.
-const TAB_ORDER: { id: string; label: string; sources: string[] }[] = [
-  { id: "all", label: "All", sources: [] },
-  { id: "airtable", label: "Airtable · Inspections", sources: ["Airtable Commissioning Tracker"] },
-  { id: "panels", label: "Panel Schedules", sources: ["SharePoint Panel Schedules"] },
-  { id: "groupme", label: "GroupMe · Energization", sources: ["GroupMe"] },
-  { id: "facilitygrid", label: "FacilityGrid", sources: ["FacilityGrid"] },
-  { id: "fa", label: "FA Testing · TCO", sources: ["W2 FA Testing Tracker"] },
-  { id: "mel", label: "MEL", sources: ["MEL Master Equipment List"] },
-  { id: "constraints", label: "Constraints", sources: ["Cx Constraint Log"] },
-  { id: "rfis", label: "RFIs", sources: ["Procore RFI Log"] },
+// Source columns per the field sketch: Airtable | GroupMe | Procore first,
+// then supporting trackers. Panel schedule records render as the breaker
+// grid up top instead of appearing as a column.
+const SOURCE_COLUMNS: { id: string; label: string; source: string }[] = [
+  { id: "airtable", label: "Airtable · Inspections", source: "Airtable Commissioning Tracker" },
+  { id: "groupme", label: "GroupMe · Energization", source: "GroupMe" },
+  { id: "rfis", label: "Procore · RFIs", source: "Procore RFI Log" },
+  { id: "constraints", label: "Constraint Log", source: "Cx Constraint Log" },
+  { id: "mel", label: "MEL", source: "MEL Master Equipment List" },
+  { id: "fa", label: "FA Testing · TCO", source: "W2 FA Testing Tracker" },
 ];
 
-interface DedupedRecord {
+const PANEL_SOURCE = "SharePoint Panel Schedules";
+
+const DATE_KEYS = [
+  "occurredOn",
+  "Last Modified",
+  "Date of Test",
+  "Created",
+  "Initiated At",
+  "dateIdentified",
+  "completedDate",
+  "testDate",
+  "updatedOn",
+  "Due Date",
+  "Closed Date",
+];
+
+interface Deduped {
   record: NormalizedRecord;
   duplicates: number;
   exact: boolean;
+  date: number;
 }
 
 function recordKey(record: NormalizedRecord): string {
@@ -50,45 +66,72 @@ function isExactMatch(record: NormalizedRecord, q: string): boolean {
   return keys.some((key) => key.toLowerCase() === target);
 }
 
-function RecordCard({ item }: { item: DedupedRecord }) {
-  const { record, duplicates, exact } = item;
+function parseDateValue(value: string): number {
+  if (!value) return 0;
+  let t = Date.parse(value);
+  if (!Number.isNaN(t)) return t;
+  t = Date.parse(value.replace(" ", "T"));
+  if (!Number.isNaN(t)) return t;
+  const m = value.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    const year = m[3]!.length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+    return new Date(year, Number(m[1]) - 1, Number(m[2])).getTime();
+  }
+  return 0;
+}
+
+function recordDate(record: NormalizedRecord): number {
+  const candidates: string[] = [];
+  if (record.status) candidates.push(record.status);
+  const raw = record.raw ?? {};
+  for (const key of DATE_KEYS) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value === "string") candidates.push(value);
+  }
+  let best = 0;
+  for (const candidate of candidates) {
+    const t = parseDateValue(candidate);
+    if (t > best) best = t;
+  }
+  return best;
+}
+
+function formatDate(t: number): string {
+  if (t <= 0) return "";
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+function RecordCard({ item }: { item: Deduped }) {
+  const { record, duplicates, exact, date } = item;
   const rawEntries = record.raw
     ? Object.entries(record.raw).filter(([, value]) => value != null && String(value).trim() !== "")
     : [];
 
   return (
-    <GlassPanel glow={exact ? "cyan" : "none"} className="p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-widest text-cyan">{record.source}</div>
-          <div className="mt-1 break-all text-sm font-medium leading-snug text-ink [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
-            {record.primaryLabel}
-          </div>
-          {record.secondaryLabel && (
-            <p className="mt-1 break-words text-xs leading-snug text-ink-dim [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
-              {record.secondaryLabel}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {exact && <Tag className="border-cyan/40 text-cyan">Exact match</Tag>}
-          {duplicates > 1 && <Tag>{duplicates}× duplicate</Tag>}
-        </div>
+    <GlassPanel glow={exact ? "cyan" : "none"} className="p-3">
+      <div className="break-all text-xs font-medium leading-snug text-ink [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
+        {record.primaryLabel}
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {record.status && <Tag>{record.status}</Tag>}
+      {record.secondaryLabel && (
+        <p className="mt-1 break-words text-[11px] leading-snug text-ink-dim [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+          {record.secondaryLabel}
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap gap-1">
+        {date > 0 && <Tag className="text-cyan">{formatDate(date)}</Tag>}
+        {record.status && <Tag className="max-w-[160px] truncate">{record.status}</Tag>}
         {record.area && <Tag>{record.area}</Tag>}
-        {record.trade && <Tag className="max-w-[220px] truncate">{record.trade}</Tag>}
-        <Tag className="max-w-[260px] truncate">{record.sourcePath}</Tag>
+        {exact && <Tag className="border-cyan/40 text-cyan">Exact</Tag>}
+        {duplicates > 1 && <Tag>{duplicates}×</Tag>}
       </div>
       {rawEntries.length > 0 && (
-        <details className="mt-3">
-          <summary className="cursor-pointer text-[11px] uppercase tracking-widest text-ink-dim hover:text-ink">
-            Source fields ({rawEntries.length})
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-ink-dim hover:text-ink">
+            Fields ({rawEntries.length})
           </summary>
-          <dl className="mt-2 space-y-2 rounded-md border border-glass-border bg-glass p-3">
+          <dl className="mt-1.5 space-y-1.5 rounded-md border border-glass-border bg-glass p-2">
             {rawEntries.map(([key, value]) => (
-              <div key={key} className="text-xs">
+              <div key={key} className="text-[11px]">
                 <dt className="uppercase tracking-wider text-ink-dim">{key}</dt>
                 <dd className="mt-0.5 whitespace-pre-wrap break-all text-ink">{String(value)}</dd>
               </div>
@@ -100,19 +143,56 @@ function RecordCard({ item }: { item: DedupedRecord }) {
   );
 }
 
+const COLUMN_PREVIEW = 6;
+
+function SourceColumn({ label, items }: { label: string; items: Deduped[] }) {
+  const preview = items.slice(0, COLUMN_PREVIEW);
+  const rest = items.slice(COLUMN_PREVIEW);
+  return (
+    <div className="min-w-0">
+      <div className="mb-2 flex items-baseline justify-between border-b border-glass-border pb-2">
+        <span className="text-xs font-semibold uppercase tracking-widest text-cyan">{label}</span>
+        <span className="text-[10px] text-ink-dim">{items.length} · latest first</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="py-4 text-center text-[11px] text-ink-dim">No matches</p>
+      ) : (
+        <div className="space-y-2">
+          {preview.map((item) => (
+            <RecordCard key={recordKey(item.record)} item={item} />
+          ))}
+          {rest.length > 0 && (
+            <details>
+              <summary className="cursor-pointer py-1 text-center text-[11px] text-ink-dim hover:text-ink">
+                Show {rest.length} more
+              </summary>
+              <div className="mt-2 space-y-2">
+                {rest.map((item) => (
+                  <RecordCard key={recordKey(item.record)} item={item} />
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SearchResults() {
   const searchParams = useSearchParams();
   const query = (searchParams.get("q") ?? "").trim();
   const { records, recordCount } = useProjectData();
-  const [activeTab, setActiveTab] = useState("all");
 
-  const { byTab, mockAssetHits, mockPanelHits } = useMemo(() => {
+  const { columns, panel, energized, openConstraints, mockAssetHits, mockPanelHits, totalMatches } = useMemo(() => {
     const q = query.toLowerCase();
-    const grouped = new Map<string, DedupedRecord[]>();
-    for (const tab of TAB_ORDER) grouped.set(tab.id, []);
+    const bySource = new Map<string, Deduped[]>();
+    const panelCircuits: Deduped[] = [];
+    const panelTitles: Deduped[] = [];
+    const seen = new Map<string, Deduped>();
+    let total = 0;
 
     if (q.length > 0) {
-      const seen = new Map<string, DedupedRecord>();
       for (const record of records) {
         if (!recordHaystack(record).includes(q)) continue;
         const key = recordKey(record);
@@ -121,17 +201,83 @@ export function SearchResults() {
           existing.duplicates += 1;
           continue;
         }
-        const item: DedupedRecord = { record, duplicates: 1, exact: isExactMatch(record, query) };
+        const item: Deduped = {
+          record,
+          duplicates: 1,
+          exact: isExactMatch(record, query),
+          date: recordDate(record),
+        };
         seen.set(key, item);
-        const tab = TAB_ORDER.find((candidate) => candidate.sources.includes(record.source));
-        grouped.get(tab ? tab.id : "all")!.push(item);
-        if (tab) grouped.get("all")!.push(item);
+        total += 1;
+
+        if (record.source === PANEL_SOURCE) {
+          if (record.recordType === "panel_circuit") panelCircuits.push(item);
+          else panelTitles.push(item);
+          continue;
+        }
+        const list = bySource.get(record.source) ?? [];
+        list.push(item);
+        bySource.set(record.source, list);
       }
-      // Exact matches float to the top of every tab.
-      for (const list of grouped.values()) {
-        list.sort((a, b) => Number(b.exact) - Number(a.exact));
+      for (const list of bySource.values()) {
+        list.sort((a, b) => b.date - a.date || Number(b.exact) - Number(a.exact));
       }
     }
+
+    // Assemble the breaker grid: group circuits by parent panel, prefer the
+    // panel whose id matches the query, else the one with the most circuits.
+    let panelData: { panelId: string; rating?: string; fedFrom?: string; circuits: LiveCircuit[] } | null = null;
+    if (panelCircuits.length > 0) {
+      const groups = new Map<string, Deduped[]>();
+      for (const item of panelCircuits) {
+        const panelId = item.record.panelKeys[0] ?? "Unknown panel";
+        const list = groups.get(panelId) ?? [];
+        list.push(item);
+        groups.set(panelId, list);
+      }
+      let chosenId = "";
+      let chosen: Deduped[] = [];
+      for (const [panelId, list] of groups) {
+        if (panelId.toLowerCase() === q) {
+          chosenId = panelId;
+          chosen = list;
+          break;
+        }
+        if (list.length > chosen.length) {
+          chosenId = panelId;
+          chosen = list;
+        }
+      }
+      const title = panelTitles.find((item) => item.record.primaryLabel === chosenId);
+      const titleRaw = (title?.record.raw ?? {}) as Record<string, unknown>;
+      const circuitMap = new Map<number, LiveCircuit>();
+      for (const item of chosen) {
+        const raw = (item.record.raw ?? {}) as Record<string, unknown>;
+        const num = Number(raw.circuit ?? item.record.circuitKeys[0]);
+        if (!Number.isFinite(num)) continue;
+        if (!circuitMap.has(num)) {
+          circuitMap.set(num, {
+            circuit: num,
+            breaker: typeof raw.breaker === "string" ? raw.breaker : undefined,
+            downstream: typeof raw.downstream === "string" ? raw.downstream : undefined,
+          });
+        }
+      }
+      panelData = {
+        panelId: chosenId,
+        rating: typeof titleRaw.rating === "string" ? titleRaw.rating : title?.record.secondaryLabel,
+        fedFrom: typeof titleRaw.fedFrom === "string" ? titleRaw.fedFrom : undefined,
+        circuits: [...circuitMap.values()],
+      };
+    }
+
+    // Headline status: latest GroupMe message mentioning energization.
+    const groupmeItems = bySource.get("GroupMe") ?? [];
+    const energizedItem = groupmeItems.find((item) => recordHaystack(item.record).includes("energiz"));
+
+    // Open constraints among matches.
+    const constraintItems = bySource.get("Cx Constraint Log") ?? [];
+    const open = constraintItems.filter((item) => !/closed|complete/i.test(item.record.status ?? ""));
 
     const assetHits =
       q.length > 0
@@ -141,75 +287,113 @@ export function SearchResults() {
         : [];
     const panelHits =
       q.length > 0
-        ? MOCK_PANEL_SCHEDULES.filter((panel) => `${panel.panelId} ${panel.panelName}`.toLowerCase().includes(q))
+        ? MOCK_PANEL_SCHEDULES.filter((p) => `${p.panelId} ${p.panelName}`.toLowerCase().includes(q))
         : [];
 
-    return { byTab: grouped, mockAssetHits: assetHits, mockPanelHits: panelHits };
+    return {
+      columns: SOURCE_COLUMNS.map((col) => ({ ...col, items: bySource.get(col.source) ?? [] })),
+      panel: panelData,
+      energized: energizedItem ?? null,
+      openConstraints: open,
+      mockAssetHits: assetHits,
+      mockPanelHits: panelHits,
+      totalMatches: total,
+    };
   }, [query, records]);
 
-  const tabs: TabDef[] = TAB_ORDER.map((tab) => ({
-    id: tab.id,
-    label: tab.label,
-    count: byTab.get(tab.id)?.length ?? 0,
-  }));
-
-  const activeResults = byTab.get(activeTab) ?? [];
-
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="mx-auto max-w-7xl px-6 py-10">
       <SectionHeading
         eyebrow={query ? `Results for "${query}"` : "Search"}
         title={query || "Type a query in the search bar"}
         description={
           recordCount === 0
-            ? "No project data loaded in this browser yet — click Connect data in the top bar and select the pipeline output JSON files to search every Asset #, Equipment ID, RFI, circuit, and message."
-            : `Searching ${recordCount.toLocaleString()} imported records across every source, plus built-in assets and panels.`
+            ? "No project data loaded in this browser yet — click Connect data in the top bar and select the pipeline output JSON files."
+            : `${totalMatches.toLocaleString()} matches across ${recordCount.toLocaleString()} imported records.`
         }
       />
 
-      {(mockAssetHits.length > 0 || mockPanelHits.length > 0) && (
-        <div className="mt-8 flex flex-wrap gap-2">
+      {/* Primary answers: status, constraints, quick links */}
+      {query && (
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
+              energized
+                ? "border-emerald/40 bg-emerald-soft text-emerald"
+                : "border-gold/40 bg-gold-soft text-gold"
+            )}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            {energized
+              ? `Status — Energized (GroupMe, ${formatDate(energized.date) || "date unknown"})`
+              : "No energization record found"}
+          </span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium",
+              openConstraints.length > 0
+                ? "border-red/40 bg-red-soft text-red"
+                : "border-emerald/40 bg-emerald-soft text-emerald"
+            )}
+          >
+            {openConstraints.length > 0 ? (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            ) : (
+              <CircleCheck className="h-3.5 w-3.5" />
+            )}
+            {openConstraints.length > 0
+              ? `${openConstraints.length} open constraint${openConstraints.length === 1 ? "" : "s"}`
+              : "No open constraints"}
+          </span>
           {mockAssetHits.map((asset) => (
             <Link
               key={asset.id}
               href={`/assets/${asset.id}`}
-              className="flex items-center gap-2 rounded-md border border-glass-border-hi bg-glass px-3 py-2 text-xs text-ink transition-colors hover:border-cyan/40"
+              className="inline-flex items-center gap-2 rounded-full border border-glass-border-hi bg-glass px-3 py-1.5 text-xs text-ink transition-colors hover:border-cyan/40"
             >
               <Layers className="h-3.5 w-3.5 text-cyan" />
               {asset.name}
               <StatusPill status={asset.status} />
             </Link>
           ))}
-          {mockPanelHits.map((panel) => (
+          {mockPanelHits.map((p) => (
             <Link
-              key={panel.panelId}
-              href={`/panels/${encodeURIComponent(panel.panelId)}`}
-              className="flex items-center gap-2 rounded-md border border-glass-border-hi bg-glass px-3 py-2 text-xs text-ink transition-colors hover:border-purple/40"
+              key={p.panelId}
+              href={`/panels/${encodeURIComponent(p.panelId)}`}
+              className="inline-flex items-center gap-2 rounded-full border border-glass-border-hi bg-glass px-3 py-1.5 text-xs text-ink transition-colors hover:border-purple/40"
             >
               <Boxes className="h-3.5 w-3.5 text-purple" />
-              {panel.panelName}
+              {p.panelName}
             </Link>
           ))}
         </div>
       )}
 
-      <Tabs tabs={tabs} activeId={activeTab} onChange={setActiveTab} className="mt-8" />
+      {/* Panel schedule breaker grid from live records */}
+      {panel && panel.circuits.length > 0 && (
+        <section className="mt-8">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-widest text-cyan">
+            Panel Schedule · {PANEL_SOURCE}
+          </div>
+          <LivePanelSchedule
+            panelId={panel.panelId}
+            rating={panel.rating}
+            fedFrom={panel.fedFrom}
+            circuits={panel.circuits}
+            highlightText={query}
+          />
+        </section>
+      )}
 
-      <div className="mt-6 space-y-3">
-        {activeTab === "facilitygrid" && activeResults.length === 0 && (
-          <GlassPanel className="flex items-center gap-3 p-5 text-sm text-ink-dim">
-            <Database className="h-4 w-4 shrink-0" />
-            FacilityGrid live status comes from the Tampermonkey bridge in a later phase — its exports aren&apos;t in
-            the parsed dataset yet.
-          </GlassPanel>
-        )}
-        {activeTab !== "facilitygrid" && query && activeResults.length === 0 && (
-          <p className="py-8 text-center text-sm text-ink-dim">No records in this tab for &quot;{query}&quot;.</p>
-        )}
-        {activeResults.map((item) => (
-          <RecordCard key={recordKey(item.record)} item={item} />
-        ))}
-      </div>
+      {/* Source columns, latest first */}
+      {query && (
+        <div className="mt-10 grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {columns.map((col) => (
+            <SourceColumn key={col.id} label={col.label} items={col.items} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

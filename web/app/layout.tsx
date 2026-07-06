@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { GrainOverlay } from "@/components/ui";
+import { GlobalBackdrop } from "@/components/three";
 import { DataProvider } from "@/features/data/DataProvider";
 import "./globals.css";
 
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body>
         <GrainOverlay />
+        <GlobalBackdrop />
         <DataProvider>{children}</DataProvider>
       </body>
     </html>

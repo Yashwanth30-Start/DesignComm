@@ -4,7 +4,7 @@ import { Topbar } from "./Topbar";
 
 export function PageShell({ children, breadcrumb }: { children: ReactNode; breadcrumb?: ReactNode }) {
   return (
-    <div className="min-h-screen bg-bg text-ink">
+    <div className="min-h-screen text-ink">
       <NavRail />
       <Topbar breadcrumb={breadcrumb} />
       <main className="md:pl-16">{children}</main>
