@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CanvasStage } from "./CanvasStage";
-import { ParticleField } from "./ParticleField";
+import { TesseractSwarm } from "./TesseractSwarm";
 import { ElectricalGridFloor } from "./ElectricalGridFloor";
 
 // Composed ambient 3D backdrop used behind the cinematic hero. Mounts only
@@ -16,7 +16,7 @@ export function AmbientScene() {
 
   return (
     <CanvasStage>
-      <ParticleField />
+      <TesseractSwarm />
       <ElectricalGridFloor />
     </CanvasStage>
   );

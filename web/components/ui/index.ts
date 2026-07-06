@@ -11,3 +11,4 @@ export * from "./SectionHeading";
 export * from "./PanelSchedule";
 export * from "./GrainOverlay";
 export * from "./Marquee";
+export * from "./Tabs";
