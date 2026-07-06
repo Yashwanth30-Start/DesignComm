@@ -1,5 +1,5 @@
-import { CinematicLanding } from "@/features/landing/CinematicLanding";
+import { ParticleLanding } from "@/features/landing/ParticleLanding";
 
 export default function HomePage() {
-  return <CinematicLanding />;
+  return <ParticleLanding />;
 }

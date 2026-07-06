@@ -38,14 +38,16 @@ export async function saveRecords(records: NormalizedRecord[]): Promise<void> {
 
 export async function loadStoredRecords(): Promise<NormalizedRecord[]> {
   const db = await openDb();
-  const records = await new Promise<NormalizedRecord[]>((resolve, reject) => {
+  const records = await new Promise<unknown[]>((resolve, reject) => {
     const tx = db.transaction(STORE, "readonly");
     const request = tx.objectStore(STORE).getAll();
-    request.onsuccess = () => resolve(request.result as NormalizedRecord[]);
+    request.onsuccess = () => resolve(request.result as unknown[]);
     request.onerror = () => reject(request.error);
   });
   db.close();
-  return records;
+  // Sanitize on read too, so data imported before sanitization existed heals
+  // without a re-import.
+  return records.map(sanitizeRecord).filter((record): record is NormalizedRecord => record !== null);
 }
 
 export async function clearStoredRecords(): Promise<void> {
@@ -59,13 +61,56 @@ export async function clearStoredRecords(): Promise<void> {
   db.close();
 }
 
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function toStringArray(value: unknown): string[] {
+  // PowerShell 5.1's ConvertTo-Json can emit a lone string (or null entries)
+  // where the contract says string[]; normalize all of those shapes.
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item !== "");
+  }
+  if (typeof value === "string" && value !== "") return [value];
+  return [];
+}
+
+// Pipeline output can contain nulls (empty spreadsheet cells become null
+// labels/keys). Everything downstream assumes strings, so records are
+// normalized here — the single choke point for both import and load.
+export function sanitizeRecord(item: unknown): NormalizedRecord | null {
+  if (typeof item !== "object" || item === null) return null;
+  const value = item as Record<string, unknown>;
+  const source = asOptionalString(value.source);
+  const sourceRecordId = asOptionalString(value.sourceRecordId) ?? "";
+  const primaryLabel = asOptionalString(value.primaryLabel) ?? sourceRecordId;
+  if (!source || !primaryLabel) return null;
+
+  return {
+    source,
+    sourceRecordId,
+    sourcePath: asOptionalString(value.sourcePath) ?? "",
+    sourceSheet: asOptionalString(value.sourceSheet),
+    recordType: asOptionalString(value.recordType) ?? "record",
+    primaryLabel,
+    secondaryLabel: asOptionalString(value.secondaryLabel),
+    status: asOptionalString(value.status),
+    area: asOptionalString(value.area),
+    location: asOptionalString(value.location),
+    trade: asOptionalString(value.trade),
+    assetKeys: toStringArray(value.assetKeys),
+    panelKeys: toStringArray(value.panelKeys),
+    circuitKeys: toStringArray(value.circuitKeys),
+    rfiKeys: toStringArray(value.rfiKeys),
+    searchText: asOptionalString(value.searchText),
+    raw: typeof value.raw === "object" ? (value.raw as Record<string, unknown> | null) : null,
+  };
+}
+
 export function parseRecordsJson(text: string): NormalizedRecord[] {
   // PowerShell 5.1 Out-File -Encoding utf8 writes a BOM; JSON.parse rejects it.
   const cleaned = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const parsed = JSON.parse(cleaned);
   const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
-  return list.filter(
-    (item): item is NormalizedRecord =>
-      typeof item === "object" && item !== null && "primaryLabel" in item && "source" in item
-  );
+  return list.map(sanitizeRecord).filter((record): record is NormalizedRecord => record !== null);
 }
