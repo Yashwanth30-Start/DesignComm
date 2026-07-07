@@ -78,18 +78,22 @@ function assetLastUpdated(asset: Asset): string {
 // Focused entity resolution: the search answers with ONE entity, never a dump.
 type Focus =
   | { kind: "asset"; asset: Asset }
+  | { kind: "record"; hit: Hit }
   | { kind: "panel"; panelId: string }
   | { kind: "area"; areaId: string }
   | { kind: "circuit"; circuit: string }
   | { kind: "none" };
 
-function resolveFocus(q: string, livePanelIds: string[]): Focus {
+function resolveFocus(q: string, livePanelIds: string[], liveExact: Hit | null): Focus {
   if (q.length === 0) return { kind: "none" };
 
   const exactAsset = MOCK_ASSETS.find(
     (a) => a.name.toLowerCase() === q || a.id.toLowerCase() === q
   );
   if (exactAsset) return { kind: "asset", asset: exactAsset };
+
+  // Exact hit in imported data (e.g. FACU-13 from MEL / FA / Airtable rows).
+  if (liveExact) return { kind: "record", hit: liveExact };
 
   const areaMatch = WING2_AREAS.find((a) => a.id.toLowerCase() === q);
   if (areaMatch) return { kind: "area", areaId: areaMatch.id };
@@ -156,7 +160,7 @@ function EvidenceStrip({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {withHits.map((s) => (
           <GlassPanel key={s.id} className="p-3">
-            <details>
+            <details open>
               <summary className="flex cursor-pointer items-baseline justify-between">
                 <span className="text-xs font-semibold uppercase tracking-widest text-cyan">{s.label}</span>
                 <span className="text-[10px] text-ink-dim">{s.hits.length} · latest first</span>
@@ -228,12 +232,26 @@ export function SearchResults() {
       (hit) => !/closed|complete/i.test(hit.record.status ?? "")
     );
 
-    const focus = resolveFocus(q, [...panelCircuits.keys()]);
+    // Merge every non-panel hit, best matches first, for focus + fallback.
+    const merged: Hit[] = [];
+    for (const s of SOURCES) {
+      const list = buckets.get(s.source);
+      if (list) merged.push(...list);
+    }
+    merged.sort((a, b) => b.date - a.date);
+    const liveExact =
+      merged.find((h) => h.record.primaryLabel.toLowerCase() === q) ??
+      merged.find((h) => h.record.assetKeys.some((k) => k.toLowerCase() === q)) ??
+      merged.find((h) => h.record.primaryLabel.toLowerCase().startsWith(q)) ??
+      null;
+    const topHits = merged.slice(0, 6);
 
-    return { q, buckets, panelCircuits, totalMatches, energized, openConstraints, focus };
+    const focus = resolveFocus(q, [...panelCircuits.keys()], liveExact);
+
+    return { q, buckets, panelCircuits, totalMatches, energized, openConstraints, focus, topHits };
   }, [query, records]);
 
-  const { q, buckets, panelCircuits, totalMatches, energized, openConstraints, focus } = model;
+  const { q, buckets, panelCircuits, totalMatches, energized, openConstraints, focus, topHits } = model;
 
   // Live circuits for a given panel id, deduped by circuit number.
   function liveCircuitsFor(panelId: string): LiveCircuit[] {
@@ -321,9 +339,27 @@ export function SearchResults() {
           />
         )}
 
+        {focus.kind === "record" && (
+          <LiveFocus
+            hit={focus.hit}
+            energizedLabel={energized ? `Energized (GroupMe, ${formatDate(energized.date)})` : null}
+          />
+        )}
+
         {focus.kind === "area" && <AreaFocus areaId={focus.areaId} openConstraints={openConstraints.length} />}
 
         {focus.kind === "circuit" && <CircuitFocus circuit={focus.circuit} panelCircuits={panelCircuits} />}
+
+        {focus.kind === "none" && q.length > 0 && topHits.length > 0 && (
+          <section className="mt-8">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-dim">Top matches</div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {topHits.map((hit) => (
+                <CompactHitCard key={hitKey(hit.record)} hit={hit} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {focus.kind === "none" && q.length > 0 && totalMatches === 0 && recordCount > 0 && (
           <GlassPanel className="mt-8 p-6 text-center text-sm text-ink-dim">
@@ -384,7 +420,7 @@ function AssetFocus({
             <InfoRow
               label="Panel"
               value={asset.panel}
-              href={`/panels/${encodeURIComponent(asset.panel)}`}
+              href={`/search?q=${encodeURIComponent(asset.panel)}`}
             />
             <InfoRow
               label="Circuit"
@@ -495,12 +531,14 @@ function PanelFocus({
               </p>
             )}
           </div>
-          <Link
-            href={`/panels/${encodeURIComponent(panelId)}`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-glass-border-hi bg-glass px-4 py-2 text-xs font-medium text-ink transition-colors hover:border-purple/40 hover:text-purple"
-          >
-            Panel page <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
+          {mockSchedule && (
+            <Link
+              href={`/panels/${encodeURIComponent(panelId)}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-glass-border-hi bg-glass px-4 py-2 text-xs font-medium text-ink transition-colors hover:border-purple/40 hover:text-purple"
+            >
+              Panel page <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </div>
       </GlassPanel>
 
@@ -576,7 +614,7 @@ function AreaFocus({ areaId, openConstraints }: { areaId: string; openConstraint
               {panels.map((p) => (
                 <Link
                   key={p}
-                  href={`/panels/${encodeURIComponent(p)}`}
+                  href={`/search?q=${encodeURIComponent(p)}`}
                   className="flex items-center gap-2 rounded-md border border-glass-border bg-glass px-3 py-2 text-xs text-ink transition-colors hover:border-purple/40"
                 >
                   <Boxes className="h-3.5 w-3.5 text-purple" /> {p}
@@ -664,5 +702,124 @@ function CircuitFocus({
         )}
       </GlassPanel>
     </section>
+  );
+}
+
+function sourceLabel(source: string): string {
+  return SOURCES.find((s) => s.source === source)?.label ?? source;
+}
+
+// Focused card synthesized from a live imported record — the answer when the
+// searched asset exists in MEL / FA / Airtable / trackers but not in mocks.
+function LiveFocus({ hit, energizedLabel }: { hit: Hit; energizedLabel: string | null }) {
+  const { record, date } = hit;
+  const rawEntries = record.raw
+    ? Object.entries(record.raw).filter(([, value]) => value != null && String(value).trim() !== "")
+    : [];
+
+  return (
+    <section className="mt-8">
+      <GlassPanel glow="cyan" className="p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="break-all text-2xl font-semibold tracking-tight text-ink">{record.primaryLabel}</h2>
+            <p className="mt-1 text-xs text-ink-dim">
+              {sourceLabel(record.source)}
+              {date > 0 && <span className="ml-2 font-mono">{formatDate(date)}</span>}
+              {energizedLabel && <span className="ml-3 text-emerald">{energizedLabel}</span>}
+            </p>
+          </div>
+          {record.status && <Tag className="max-w-[220px] truncate text-cyan">{record.status}</Tag>}
+        </div>
+
+        {record.secondaryLabel && (
+          <p className="mt-3 break-words text-sm text-ink-dim">{record.secondaryLabel}</p>
+        )}
+
+        <div className="mt-5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {record.area && (
+            <InfoRow label="Area" value={record.area} href={`/search?q=${encodeURIComponent(record.area)}`} />
+          )}
+          {record.location && <InfoRow label="Location" value={record.location} />}
+          {record.trade && <InfoRow label="Trade" value={record.trade} />}
+          <InfoRow label="Source ID" value={record.sourceRecordId} />
+        </div>
+
+        {(record.panelKeys.length > 0 || record.circuitKeys.length > 0) && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {record.panelKeys.slice(0, 4).map((key) => (
+              <Link
+                key={key}
+                href={`/search?q=${encodeURIComponent(key)}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-purple/40 bg-glass px-3 py-1 text-[11px] text-purple transition-colors hover:bg-purple/10"
+              >
+                <Boxes className="h-3 w-3" /> {key}
+              </Link>
+            ))}
+            {record.circuitKeys.slice(0, 6).map((key) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1.5 rounded-full border border-glass-border-hi bg-glass px-3 py-1 text-[11px] text-ink-dim"
+              >
+                <PlugZap className="h-3 w-3 text-cyan" /> CKT {key}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {rawEntries.length > 0 && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-ink-dim hover:text-ink">
+              All fields ({rawEntries.length})
+            </summary>
+            <dl className="mt-2 space-y-1.5 rounded-md border border-glass-border bg-glass p-3">
+              {rawEntries.map(([key, value]) => (
+                <div key={key} className="text-[11px]">
+                  <dt className="uppercase tracking-wider text-ink-dim">{key}</dt>
+                  <dd className="mt-0.5 whitespace-pre-wrap break-all text-ink">{String(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        )}
+      </GlassPanel>
+    </section>
+  );
+}
+
+function CompactHitCard({ hit }: { hit: Hit }) {
+  const { record, date } = hit;
+  const rawEntries = record.raw
+    ? Object.entries(record.raw).filter(([, value]) => value != null && String(value).trim() !== "")
+    : [];
+
+  return (
+    <GlassPanel className="p-3">
+      <div className="break-all text-xs font-medium leading-snug text-ink">{record.primaryLabel}</div>
+      {record.secondaryLabel && (
+        <p className="mt-1 truncate text-[11px] text-ink-dim">{record.secondaryLabel}</p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <Tag className="text-cyan">{sourceLabel(record.source)}</Tag>
+        {record.status && <Tag className="max-w-[140px] truncate">{record.status}</Tag>}
+        {record.area && <Tag>{record.area}</Tag>}
+        {date > 0 && <span className="font-mono text-[10px] text-ink-dim2">{formatDate(date)}</span>}
+      </div>
+      {rawEntries.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-ink-dim hover:text-ink">
+            Fields ({rawEntries.length})
+          </summary>
+          <dl className="mt-1.5 space-y-1.5 rounded-md border border-glass-border bg-glass p-2">
+            {rawEntries.map(([key, value]) => (
+              <div key={key} className="text-[11px]">
+                <dt className="uppercase tracking-wider text-ink-dim">{key}</dt>
+                <dd className="mt-0.5 whitespace-pre-wrap break-all text-ink">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
+    </GlassPanel>
   );
 }

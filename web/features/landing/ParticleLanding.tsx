@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, ArrowRight } from "lucide-react";
-import { BlackHoleStage } from "@/components/three";
+import { SwarmStage } from "@/components/three";
 
 // Cinematic landing: the singularity hangs in a dark sky above a luminous
 // horizon (per the art direction reference) with the headline and universal
@@ -21,8 +21,8 @@ export function ParticleLanding() {
 
   return (
     <div className="relative flex h-screen items-center justify-center overflow-hidden bg-black text-white">
-      {/* Layer 1: the black hole, filling the sky */}
-      <BlackHoleStage className="z-[1]" offsetY={1.1} cameraPosition={[0, 1.4, 7.4]} fov={58} />
+      {/* Layer 1: the quantum tesseract particle simulator, full-bleed */}
+      <SwarmStage className="z-[1]" />
 
       {/* Layer 2: luminous horizon — bright line + reflection pool glow */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[38vh]">
