@@ -281,7 +281,7 @@ export function SearchResults() {
     } else if (assetHits.length > 0) {
       // Fallback: if searching for an asset (no imported panel records), extract panel/circuit from asset.
       const asset = assetHits[0];
-      if (asset.panel && asset.circuit) {
+      if (asset && asset.panel && asset.circuit) {
         panelData = {
           panelId: asset.panel,
           circuits: [
