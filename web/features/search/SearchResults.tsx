@@ -10,6 +10,7 @@ import type { NormalizedRecord } from "@/types/domain";
 import { useProjectData } from "@/features/data/DataProvider";
 import { MOCK_ASSETS, MOCK_PANEL_SCHEDULES } from "@/lib/mock-data";
 import { LivePanelSchedule, type LiveCircuit } from "./LivePanelSchedule";
+import { SearchVisualization } from "./SearchVisualization";
 import { cn } from "@/utils/cn";
 
 // Source columns per the field sketch: Airtable | GroupMe | Procore first,
@@ -192,6 +193,13 @@ export function SearchResults() {
     const seen = new Map<string, Deduped>();
     let total = 0;
 
+    const assetHits =
+      q.length > 0
+        ? MOCK_ASSETS.filter((asset) =>
+            `${asset.name} ${asset.area} ${asset.room} ${asset.panel} ${asset.circuit}`.toLowerCase().includes(q)
+          )
+        : [];
+
     if (q.length > 0) {
       for (const record of records) {
         if (!recordHaystack(record).includes(q)) continue;
@@ -226,6 +234,7 @@ export function SearchResults() {
 
     // Assemble the breaker grid: group circuits by parent panel, prefer the
     // panel whose id matches the query, else the one with the most circuits.
+    // Fall back to asset info if no imported panel records exist.
     let panelData: { panelId: string; rating?: string; fedFrom?: string; circuits: LiveCircuit[] } | null = null;
     if (panelCircuits.length > 0) {
       const groups = new Map<string, Deduped[]>();
@@ -269,6 +278,21 @@ export function SearchResults() {
         fedFrom: typeof titleRaw.fedFrom === "string" ? titleRaw.fedFrom : undefined,
         circuits: [...circuitMap.values()],
       };
+    } else if (assetHits.length > 0) {
+      // Fallback: if searching for an asset (no imported panel records), extract panel/circuit from asset.
+      const asset = assetHits[0];
+      if (asset.panel && asset.circuit) {
+        panelData = {
+          panelId: asset.panel,
+          circuits: [
+            {
+              circuit: Number(asset.circuit),
+              breaker: undefined,
+              downstream: asset.name,
+            },
+          ],
+        };
+      }
     }
 
     // Headline status: latest GroupMe message mentioning energization.
@@ -279,12 +303,6 @@ export function SearchResults() {
     const constraintItems = bySource.get("Cx Constraint Log") ?? [];
     const open = constraintItems.filter((item) => !/closed|complete/i.test(item.record.status ?? ""));
 
-    const assetHits =
-      q.length > 0
-        ? MOCK_ASSETS.filter((asset) =>
-            `${asset.name} ${asset.area} ${asset.room} ${asset.panel} ${asset.circuit}`.toLowerCase().includes(q)
-          )
-        : [];
     const panelHits =
       q.length > 0
         ? MOCK_PANEL_SCHEDULES.filter((p) => `${p.panelId} ${p.panelName}`.toLowerCase().includes(q))
@@ -302,19 +320,21 @@ export function SearchResults() {
   }, [query, records]);
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-10">
-      <SectionHeading
-        eyebrow={query ? `Results for "${query}"` : "Search"}
-        title={query || "Type a query in the search bar"}
-        description={
-          recordCount === 0
-            ? "No project data loaded in this browser yet — click Connect data in the top bar and select the pipeline output JSON files."
-            : `${totalMatches.toLocaleString()} matches across ${recordCount.toLocaleString()} imported records.`
-        }
-      />
+    <div className="relative min-h-screen">
+      <SearchVisualization query={query} />
+      <div className="relative z-20 mx-auto max-w-7xl px-6 py-10">
+        <SectionHeading
+          eyebrow={query ? `Results for "${query}"` : "Search"}
+          title={query || "Type a query in the search bar"}
+          description={
+            recordCount === 0
+              ? "No project data loaded in this browser yet — click Connect data in the top bar and select the pipeline output JSON files."
+              : `${totalMatches.toLocaleString()} matches across ${recordCount.toLocaleString()} imported records.`
+          }
+        />
 
       {/* Primary answers: status, constraints, quick links */}
-      {query && (
+      {(query || mockAssetHits.length > 0) && (
         <div className="mt-6 flex flex-wrap items-center gap-2">
           <span
             className={cn(
@@ -382,6 +402,7 @@ export function SearchResults() {
             fedFrom={panel.fedFrom}
             circuits={panel.circuits}
             highlightText={query}
+            energized={energized !== null}
           />
         </section>
       )}
@@ -394,6 +415,7 @@ export function SearchResults() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

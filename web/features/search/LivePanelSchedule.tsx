@@ -15,12 +15,13 @@ export interface LivePanelScheduleProps {
   fedFrom?: string;
   circuits: LiveCircuit[];
   highlightText?: string;
+  energized?: boolean;
 }
 
 // Classic two-bank panel schedule: odd circuits (1,3,5…) down the left,
 // even circuits (2,4,6…) down the right — built live from imported
 // SharePoint panel-circuit records.
-export function LivePanelSchedule({ panelId, rating, fedFrom, circuits, highlightText }: LivePanelScheduleProps) {
+export function LivePanelSchedule({ panelId, rating, fedFrom, circuits, highlightText, energized }: LivePanelScheduleProps) {
   const odd = circuits.filter((c) => c.circuit % 2 === 1).sort((a, b) => a.circuit - b.circuit);
   const even = circuits.filter((c) => c.circuit % 2 === 0).sort((a, b) => a.circuit - b.circuit);
   const rowCount = Math.max(odd.length, even.length);
@@ -32,9 +33,12 @@ export function LivePanelSchedule({ panelId, rating, fedFrom, circuits, highligh
   }
 
   return (
-    <GlassPanel glow="cyan" className="overflow-x-auto">
+    <GlassPanel glow={energized ? "emerald" : "cyan"} className="overflow-x-auto">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-glass-border px-4 py-3">
-        <span className="text-sm font-semibold text-ink">{panelId}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-ink">{panelId}</span>
+          {energized && <span className="h-1.5 w-1.5 rounded-full bg-emerald animate-pulse" />}
+        </div>
         <span className="text-[11px] text-ink-dim">
           {rating}
           {fedFrom && <span className="ml-3">FED FROM: {fedFrom}</span>}
@@ -63,7 +67,7 @@ export function LivePanelSchedule({ panelId, rating, fedFrom, circuits, highligh
                   className={cn(
                     "break-all px-3 py-1.5",
                     left?.downstream === "BLANK" || !left?.downstream ? "text-ink-dim2" : "text-ink",
-                    isHit(left) && "bg-cyan-soft font-medium text-cyan"
+                    isHit(left) && (energized ? "bg-emerald-soft font-medium text-emerald" : "bg-cyan-soft font-medium text-cyan")
                   )}
                 >
                   {left ? (left.downstream ?? "") : ""}
@@ -72,7 +76,7 @@ export function LivePanelSchedule({ panelId, rating, fedFrom, circuits, highligh
                   className={cn(
                     "break-all px-3 py-1.5 text-right",
                     right?.downstream === "BLANK" || !right?.downstream ? "text-ink-dim2" : "text-ink",
-                    isHit(right) && "bg-cyan-soft font-medium text-cyan"
+                    isHit(right) && (energized ? "bg-emerald-soft font-medium text-emerald" : "bg-cyan-soft font-medium text-cyan")
                   )}
                 >
                   {right ? (right.downstream ?? "") : ""}
