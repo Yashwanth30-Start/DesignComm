@@ -65,6 +65,7 @@ export function SearchVisualization({ query }: { query: string }) {
 
       for (let i = 0; i < activeareas.length; i++) {
         const area = activeareas[i];
+        if (!area) continue;
         const col = i % cols;
         const row = Math.floor(i / cols);
         const x = cellW * (col + 0.5) + (Math.random() - 0.5) * cellW * 0.3;
