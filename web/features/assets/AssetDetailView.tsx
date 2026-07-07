@@ -12,6 +12,7 @@ import {
 
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
 import { GlassPanel, SectionHeading, StatusPill, Tag, Timeline, Divider, PanelSchedule } from "@/components/ui";
+import { FacilityGridCard } from "./FacilityGridCard";
 import type { Asset, PanelScheduleData } from "@/types/domain";
 
 export function AssetDetailView({
@@ -48,15 +49,15 @@ export function AssetDetailView({
       </Reveal>
 
       <Reveal delay={0.15}>
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
           <GlassPanel className="p-5">
             <div className="text-xs uppercase tracking-widest text-ink-dim">Inspection Status</div>
             <div className="mt-2 text-sm text-ink">{asset.inspectionStatus}</div>
           </GlassPanel>
-          <GlassPanel className="p-5">
-            <div className="text-xs uppercase tracking-widest text-ink-dim">Facility Grid Status</div>
-            <div className="mt-2 text-sm text-ink">{asset.facilityGridStatus}</div>
-          </GlassPanel>
+          <FacilityGridCard
+            statusText={asset.facilityGridStatus}
+            latestComment={asset.comments.find((c) => c.source === "commissionos" || c.source === "groupme")?.body}
+          />
         </div>
       </Reveal>
 

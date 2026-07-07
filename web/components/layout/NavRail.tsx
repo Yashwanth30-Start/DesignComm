@@ -6,7 +6,7 @@ import { Home, Layers, Boxes, Workflow, Settings } from "lucide-react";
 import { cn } from "@/utils/cn";
 
 const NAV_ITEMS = [
-  { icon: Home, label: "Home", href: "/" },
+  { icon: Home, label: "Home", href: "/home" },
   { icon: Layers, label: "Assets", href: "/assets" },
   { icon: Boxes, label: "Panels", href: "/panels" },
   { icon: Workflow, label: "Workflow", href: null },

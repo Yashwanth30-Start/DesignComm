@@ -1,138 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, ArrowRight } from "lucide-react";
+import { BlackHoleStage } from "@/components/three";
 
-// Single-viewport black/white landing: an interactive particle network
-// (tsParticles-style — drifting dots, links under 150px, web lines that grab
-// toward the cursor within 220px) rendered on a plain 2D canvas with zero
-// dependencies. No scrolling, no video — heading, search, and two buttons.
-const PARTICLE_COUNT = 60;
-const LINK_DISTANCE = 150;
-const GRAB_DISTANCE = 220;
-const SPEED = 0.35;
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  radius: number;
-  alpha: number;
-}
-
+// Cinematic landing: the singularity hangs in a dark sky above a luminous
+// horizon (per the art direction reference) with the headline and universal
+// search floating in front. No scrolling — one viewport, one action.
 export function ParticleLanding() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [query, setQuery] = useState("");
   const router = useRouter();
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const mouse = { x: -9999, y: -9999 };
-    let width = 0;
-    let height = 0;
-    let raf = 0;
-
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-
-    function resize() {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas!.width = width * dpr;
-      canvas!.height = height * dpr;
-      canvas!.style.width = `${width}px`;
-      canvas!.style.height = `${height}px`;
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    resize();
-
-    const particles: Particle[] = Array.from({ length: PARTICLE_COUNT }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: (Math.random() - 0.5) * SPEED * 2,
-      vy: (Math.random() - 0.5) * SPEED * 2,
-      radius: 2 + Math.random() * 3,
-      alpha: 0.15 + Math.random() * 0.35,
-    }));
-
-    function handleMouseMove(event: MouseEvent) {
-      mouse.x = event.clientX;
-      mouse.y = event.clientY;
-    }
-    function handleMouseLeave() {
-      mouse.x = -9999;
-      mouse.y = -9999;
-    }
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseout", handleMouseLeave);
-    window.addEventListener("resize", resize);
-
-    function frame() {
-      ctx!.clearRect(0, 0, width, height);
-
-      for (const p of particles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < -10) p.x = width + 10;
-        if (p.x > width + 10) p.x = -10;
-        if (p.y < -10) p.y = height + 10;
-        if (p.y > height + 10) p.y = -10;
-      }
-
-      // Particle-to-particle links.
-      for (let i = 0; i < particles.length; i++) {
-        const a = particles[i]!;
-        for (let j = i + 1; j < particles.length; j++) {
-          const b = particles[j]!;
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist < LINK_DISTANCE) {
-            ctx!.strokeStyle = `rgba(255,255,255,${0.2 * (1 - dist / LINK_DISTANCE)})`;
-            ctx!.lineWidth = 1;
-            ctx!.beginPath();
-            ctx!.moveTo(a.x, a.y);
-            ctx!.lineTo(b.x, b.y);
-            ctx!.stroke();
-          }
-        }
-
-        // Grab links to the cursor.
-        const mdx = a.x - mouse.x;
-        const mdy = a.y - mouse.y;
-        const mdist = Math.hypot(mdx, mdy);
-        if (mdist < GRAB_DISTANCE) {
-          ctx!.strokeStyle = `rgba(255,255,255,${0.6 * (1 - mdist / GRAB_DISTANCE)})`;
-          ctx!.lineWidth = 1;
-          ctx!.beginPath();
-          ctx!.moveTo(a.x, a.y);
-          ctx!.lineTo(mouse.x, mouse.y);
-          ctx!.stroke();
-        }
-
-        ctx!.fillStyle = `rgba(255,255,255,${a.alpha})`;
-        ctx!.beginPath();
-        ctx!.arc(a.x, a.y, a.radius, 0, Math.PI * 2);
-        ctx!.fill();
-      }
-
-      raf = requestAnimationFrame(frame);
-    }
-    raf = requestAnimationFrame(frame);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseout", handleMouseLeave);
-      window.removeEventListener("resize", resize);
-    };
-  }, []);
 
   function submitSearch() {
     const q = query.trim();
@@ -142,10 +21,33 @@ export function ParticleLanding() {
 
   return (
     <div className="relative flex h-screen items-center justify-center overflow-hidden bg-black text-white">
-      <canvas
-        ref={canvasRef}
-        className="pointer-events-none absolute inset-0 z-[1] opacity-80 mix-blend-screen"
-      />
+      {/* Layer 1: the black hole, filling the sky */}
+      <BlackHoleStage className="z-[1]" offsetY={1.1} cameraPosition={[0, 1.4, 7.4]} fov={58} />
+
+      {/* Layer 2: luminous horizon — bright line + reflection pool glow */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[38vh]">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(120% 90% at 50% 100%, rgba(111,227,242,0.22) 0%, rgba(111,227,242,0.07) 35%, transparent 70%)",
+          }}
+        />
+        <div
+          className="absolute inset-x-0 top-0 h-px"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent 5%, rgba(191,244,252,0.55) 35%, rgba(255,255,255,0.9) 50%, rgba(191,244,252,0.55) 65%, transparent 95%)",
+          }}
+        />
+        <div
+          className="absolute inset-x-0 top-0 h-24"
+          style={{
+            background:
+              "radial-gradient(60% 100% at 50% 0%, rgba(191,244,252,0.18) 0%, transparent 70%)",
+          }}
+        />
+      </div>
 
       {/* Minimal top bar */}
       <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between px-6 py-5 md:px-12">
@@ -153,7 +55,7 @@ export function ParticleLanding() {
           Commission<span className="text-white/50">OS</span>
         </span>
         <Link
-          href="/assets"
+          href="/home"
           className="rounded-lg bg-white px-5 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-200"
         >
           Open App
@@ -175,7 +77,7 @@ export function ParticleLanding() {
           Project Kansas, Wing 2.
         </p>
 
-        {/* Search straight from the landing page */}
+        {/* Universal search, straight from the landing page */}
         <div className="mx-auto mb-6 flex max-w-md items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-3 backdrop-blur-sm focus-within:border-white/50">
           <Search className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={1.8} />
           <input
@@ -184,7 +86,7 @@ export function ParticleLanding() {
             onKeyDown={(event) => {
               if (event.key === "Enter") submitSearch();
             }}
-            placeholder="Search assets, panels, circuits, RFIs…"
+            placeholder="Search an asset, panel, circuit, room, or area…"
             className="w-full bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
           />
           <button
@@ -198,16 +100,16 @@ export function ParticleLanding() {
 
         <div className="flex flex-wrap justify-center gap-4">
           <Link
-            href="/assets"
+            href="/home"
             className="rounded-full bg-white px-8 py-3 font-medium text-black shadow-[0_10px_25px_rgba(255,255,255,0.15)] transition-transform hover:-translate-y-0.5"
           >
-            Browse Assets
+            What should I work on today?
           </Link>
           <Link
-            href="/panels"
+            href="/assets"
             className="rounded-full border border-white/25 px-8 py-3 font-medium text-white transition-colors hover:bg-white hover:text-black"
           >
-            Browse Panels
+            Browse Assets
           </Link>
         </div>
       </main>
