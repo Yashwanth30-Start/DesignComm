@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #05070a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin, dark scrollbars to match the glass aesthetic. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Markdown typography for the Knowledge base and persona prompts. */
+.prose-eos h1 { @apply mb-3 mt-5 text-xl font-semibold text-ink first:mt-0; }
+.prose-eos h2 { @apply mb-2 mt-4 text-lg font-semibold text-ink first:mt-0; }
+.prose-eos h3 { @apply mb-2 mt-3 text-base font-semibold text-ink first:mt-0; }
+.prose-eos p { @apply mb-3 text-ink-dim; }
+.prose-eos strong { @apply text-ink; }
+.prose-eos a { @apply text-cyan underline underline-offset-2; }
+.prose-eos ul { @apply mb-3 list-disc space-y-1 pl-5 text-ink-dim; }
+.prose-eos ol { @apply mb-3 list-decimal space-y-1 pl-5 text-ink-dim; }
+.prose-eos li > p { @apply mb-1; }
+.prose-eos blockquote { @apply mb-3 border-l-2 border-cyan/40 pl-3 italic text-ink-dim; }
+.prose-eos code { @apply rounded bg-white/[0.07] px-1.5 py-0.5 font-mono text-[0.85em] text-cyan; }
+.prose-eos pre { @apply mb-3 overflow-x-auto rounded-lg border border-white/10 bg-black/40 p-3; }
+.prose-eos pre code { @apply bg-transparent p-0 text-ink; }
+.prose-eos hr { @apply my-4 border-white/10; }
+.prose-eos table { @apply mb-3 w-full border-collapse text-sm; }
+.prose-eos th { @apply border-b border-white/15 px-2 py-1 text-left text-ink; }
+.prose-eos td { @apply border-b border-white/[0.06] px-2 py-1 text-ink-dim; }

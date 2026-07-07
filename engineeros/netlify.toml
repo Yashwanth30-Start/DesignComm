@@ -1,0 +1,17 @@
+# Netlify deploy for EngineerOS.
+# When this app lives at the repo root (the dedicated engineeros repo),
+# Netlify picks this file up automatically — no dashboard build settings needed.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback: react-router owns the URL space. The service worker handles
+# this offline; this rule handles fresh deep links from the network.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
