@@ -180,6 +180,7 @@ export function SearchVisualization({ query }: { query: string }) {
         for (let j = i + 1; j < particles.length; j++) {
           const p1 = particles[i];
           const p2 = particles[j];
+          if (!p1 || !p2) continue;
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
