@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useData } from "../state/DataProvider";
-import { meetings, projects, tasks } from "../db/repo";
+import { meetings, projects, recordings, tasks } from "../db/repo";
+import { deleteAudioBlob } from "../lib/audio";
 import {
   Button,
   EmptyState,
@@ -15,6 +16,7 @@ import {
 } from "../components/ui/primitives";
 import { TaskRow } from "../features/tasks/TaskRow";
 import { TaskModal } from "../features/tasks/TaskModal";
+import { VoiceNotes } from "../features/recordings/VoiceNotes";
 import { summarizeMeetingNotes } from "../lib/assist";
 import type { Task } from "../types";
 
@@ -79,6 +81,9 @@ export default function MeetingDetail() {
 
   const removeMeeting = () => {
     if (!window.confirm("Delete this meeting? Its action items become unlinked tasks.")) return;
+    for (const rec of recordings.forEntity(db, "meeting", meeting.id)) {
+      void deleteAudioBlob(rec.id);
+    }
     mutate((d) => meetings.remove(d, meeting.id));
     navigate("/meetings");
   };
@@ -148,18 +153,24 @@ export default function MeetingDetail() {
       </GlassPanel>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <GlassPanel className="p-5">
-          <SectionHeading title="Notes" />
-          <TextArea
-            rows={14}
-            value={draft.notes}
-            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-            onBlur={save}
-            placeholder={
-              "Type meeting notes here…\n\nLines containing words like 'action', 'follow up' or 'need to' are detected as action items when you generate a summary."
-            }
-          />
-        </GlassPanel>
+        <div className="space-y-5">
+          <GlassPanel className="p-5">
+            <SectionHeading title="Notes" />
+            <TextArea
+              rows={14}
+              value={draft.notes}
+              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              onBlur={save}
+              placeholder={
+                "Type meeting notes here…\n\nLines containing words like 'action', 'follow up' or 'need to' are detected as action items when you generate a summary."
+              }
+            />
+          </GlassPanel>
+
+          <GlassPanel className="p-5">
+            <VoiceNotes entityType="meeting" entityId={meeting.id} defaultTitle="Meeting audio" />
+          </GlassPanel>
+        </div>
 
         <div className="space-y-5">
           <GlassPanel className="p-5" glow>

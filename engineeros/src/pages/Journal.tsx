@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useData } from "../state/DataProvider";
 import { journal } from "../db/repo";
 import { Button, Field, GlassPanel, Input, TextArea } from "../components/ui/primitives";
+import { VoiceNotes } from "../features/recordings/VoiceNotes";
 import { addDays, formatDayLong, today } from "../lib/dates";
 import { cn } from "../lib/cn";
 import type { JournalEntry } from "../types";
@@ -149,6 +150,10 @@ export default function Journal() {
           <p className="mt-2 text-[11px] text-ink-dim2">
             Logged time feeds the weekly review's "hours worked".
           </p>
+        </GlassPanel>
+
+        <GlassPanel className="p-4 lg:col-span-2">
+          <VoiceNotes entityType="journal" entityId={date} defaultTitle="Journal audio" />
         </GlassPanel>
       </div>
     </div>

@@ -57,7 +57,12 @@ Imported backups are re-migrated on load, so old backups stay compatible.
 | Notes + persona prompts | Markdown text in SQLite (`notes.content`, `personas.prompt`) |
 | Configuration | JSON blob in `settings` table (typed by `AppSettings`, merged over defaults so new fields appear on old databases) |
 | Watched folder handles | IndexedDB `handles` store (FileSystemDirectoryHandle is structured-cloneable but not serializable to SQL) |
+| Voice-note audio blobs | IndexedDB `audio` store, keyed by recording id; metadata in the SQLite `recordings` table (`lib/audio.ts` + `features/recordings/VoiceNotes.tsx`) |
 | SQLite snapshot | IndexedDB `sqlite` store, key `main` |
+
+Note: the Settings backup exports the SQLite file only — audio blobs are metadata-
+linked but live outside the snapshot (they can be large). A future backup format can
+bundle both.
 
 ## Offline / PWA
 

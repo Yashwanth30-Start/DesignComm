@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Eye, Pencil, Pin, Plus, Search, Trash2 } from "lucide-react";
 import { useData } from "../state/DataProvider";
-import { notes, projects } from "../db/repo";
+import { notes, projects, recordings } from "../db/repo";
+import { deleteAudioBlob } from "../lib/audio";
 import { KNOWLEDGE_CATEGORIES } from "../db/seed";
 import {
   Button,
@@ -14,6 +15,7 @@ import {
   TextArea
 } from "../components/ui/primitives";
 import { Markdown } from "../components/ui/Markdown";
+import { VoiceNotes } from "../features/recordings/VoiceNotes";
 import { relativeTime } from "../lib/dates";
 import { cn } from "../lib/cn";
 
@@ -89,6 +91,9 @@ export default function Knowledge() {
 
   const removeNote = () => {
     if (!draft || !window.confirm("Delete this note?")) return;
+    for (const rec of recordings.forEntity(db, "note", draft.id)) {
+      void deleteAudioBlob(rec.id);
+    }
     mutate((d) => notes.remove(d, draft.id));
     setParams({});
   };
@@ -268,6 +273,10 @@ export default function Knowledge() {
                   placeholder="# Write Markdown here…"
                 />
               )}
+
+              <div className="mt-4 border-t border-white/[0.06] pt-4">
+                <VoiceNotes entityType="note" entityId={draft.id} defaultTitle="Note audio" />
+              </div>
             </GlassPanel>
           )}
         </div>

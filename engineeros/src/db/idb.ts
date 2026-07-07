@@ -1,10 +1,12 @@
 /**
- * Minimal IndexedDB helpers. Two stores:
+ * Minimal IndexedDB helpers. Three stores:
  *  - "sqlite": the exported SQLite database bytes (key "main").
  *  - "handles": FileSystemDirectoryHandle objects for watched folders.
+ *  - "audio": recorded voice-note blobs, keyed by recording id
+ *    (metadata lives in the SQLite `recordings` table).
  */
 const DB_NAME = "engineeros";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openIdb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -13,6 +15,7 @@ function openIdb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains("sqlite")) db.createObjectStore("sqlite");
       if (!db.objectStoreNames.contains("handles")) db.createObjectStore("handles");
+      if (!db.objectStoreNames.contains("audio")) db.createObjectStore("audio");
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);

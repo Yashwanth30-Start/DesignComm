@@ -12,6 +12,7 @@ import type {
   Note,
   Persona,
   Project,
+  Recording,
   Task,
   WeeklyReview
 } from "../types";
@@ -277,6 +278,7 @@ export const meetings = {
   remove(db: Database, id: string): void {
     run(db, "DELETE FROM meetings WHERE id=?", [id]);
     run(db, "UPDATE tasks SET meeting_id=NULL WHERE meeting_id=?", [id]);
+    run(db, "DELETE FROM recordings WHERE entity_type='meeting' AND entity_id=?", [id]);
   }
 };
 
@@ -356,6 +358,7 @@ export const notes = {
   },
   remove(db: Database, id: string): void {
     run(db, "DELETE FROM notes WHERE id=?", [id]);
+    run(db, "DELETE FROM recordings WHERE entity_type='note' AND entity_id=?", [id]);
   }
 };
 
@@ -697,6 +700,54 @@ export const personas = {
   },
   update(db: Database, id: string, prompt: string): void {
     run(db, "UPDATE personas SET prompt=?, updated_at=? WHERE id=?", [prompt, nowIso(), id]);
+  }
+};
+
+// -------------------------------------------------------------- recordings
+
+function toRecording(r: Row): Recording {
+  return {
+    id: s(r.id),
+    title: s(r.title),
+    entityType: s(r.entity_type) as Recording["entityType"],
+    entityId: s(r.entity_id),
+    mime: s(r.mime),
+    durationSeconds: n(r.duration_seconds),
+    size: n(r.size),
+    createdAt: s(r.created_at)
+  };
+}
+
+export const recordings = {
+  forEntity(db: Database, entityType: string, entityId: string): Recording[] {
+    return rows(
+      db,
+      "SELECT * FROM recordings WHERE entity_type=? AND entity_id=? ORDER BY created_at DESC",
+      [entityType, entityId]
+    ).map(toRecording);
+  },
+  create(db: Database, data: Omit<Recording, "createdAt">): void {
+    run(
+      db,
+      `INSERT INTO recordings (id,title,entity_type,entity_id,mime,duration_seconds,size,created_at)
+       VALUES (?,?,?,?,?,?,?,?)`,
+      [
+        data.id,
+        data.title,
+        data.entityType,
+        data.entityId,
+        data.mime,
+        data.durationSeconds,
+        data.size,
+        nowIso()
+      ]
+    );
+  },
+  rename(db: Database, id: string, title: string): void {
+    run(db, "UPDATE recordings SET title=? WHERE id=?", [title, id]);
+  },
+  remove(db: Database, id: string): void {
+    run(db, "DELETE FROM recordings WHERE id=?", [id]);
   }
 };
 

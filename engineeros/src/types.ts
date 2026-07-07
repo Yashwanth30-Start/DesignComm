@@ -158,6 +158,18 @@ export interface AppSettings {
   };
 }
 
+/** Voice note metadata; the audio blob itself lives in IndexedDB. */
+export interface Recording {
+  id: string;
+  title: string;
+  entityType: "meeting" | "journal" | "note" | "";
+  entityId: string;
+  mime: string;
+  durationSeconds: number;
+  size: number;
+  createdAt: string;
+}
+
 export type SearchResultType =
   | "task"
   | "meeting"

@@ -27,7 +27,7 @@ experience. After the first load it works fully offline.
 | --- | --- |
 | **Dashboard** | Greeting, today's priorities, today's meetings, outstanding action items, weekly goal progress, learning progress, recent notes/ideas/documents, quick search, journal shortcut. |
 | **Tasks** | Full CRUD with priority, project, category, due date, estimated/actual duration, status, related meeting/document/notes. Filter by everything, plus text search. |
-| **Meetings** | Notes, attendees, project link, on-device generated summaries from typed notes, detected action items that become real linked tasks. |
+| **Meetings** | Notes, attendees, project link, on-device generated summaries from typed notes, detected action items that become real linked tasks, voice notes. |
 | **Projects** | Seeded with CommissionOS, Facility Grid, Construction Automation, Innovation, Personal Learning (plus user-created). Tabs for overview/goals, tasks, notes, ideas, files, with computed progress. |
 | **Knowledge** | Markdown notes organized into construction/engineering categories, live preview editor, pinning, tags, project links. |
 | **Documents** | Watched folders (File System Access API on Chromium; per-file import elsewhere). Indexes metadata + extracts text from plain-text formats, detects changes, bumps revisions, never duplicates by path. Never stores the files themselves. |
@@ -36,6 +36,7 @@ experience. After the first load it works fully offline.
 | **Learning Center** | Seeded topics (AI, ML, Python, JavaScript, Git, Software Architecture, Construction Technology) with progress, notes, exercises, projects, review dates (due-for-review highlighting), weak areas, next lesson. |
 | **Weekly Review** | Auto-computed stats (tasks completed, hours logged, projects advanced, ideas captured, lessons, recurring blockers) + a generated reflection with concrete recommendations. |
 | **Global Search** | One query across tasks, meetings, projects, ideas, notes, documents, learning and journal entries — every hit is one click away. |
+| **Voice notes** | One-tap audio recording on meetings, journal days and knowledge notes (MediaRecorder). Audio is stored on-device in IndexedDB with playback, rename and delete. Needs HTTPS or localhost for microphone access. |
 | **Settings** | Name, working/learning hours, default priority, weekly goals, document extensions, AI provider fields (v2-ready), editable AI persona prompts, backup export/import, reset. No hardcoded paths. |
 
 ## AI personas
@@ -64,6 +65,18 @@ See [`docs/architecture.md`](docs/architecture.md) for the full picture. In shor
 - **Modularity**: pages → repositories → database. SQL lives only in `src/db/repo.ts`;
   pages never touch SQL. Version 2 integrations (Outlook, SharePoint, Teams, Planner)
   slot in as new services writing through the same repositories.
+
+## Deploying (Netlify)
+
+The repo ships a `netlify.toml` (build `npm run build`, publish `dist/`, SPA
+redirects), so deploying is:
+
+1. [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing
+   project** → pick this GitHub repo.
+2. Accept the detected settings (they come from `netlify.toml`) and deploy.
+
+Every push to the default branch then auto-deploys. Netlify serves over HTTPS, which
+is exactly what the PWA install prompt and microphone access require.
 
 ## Backups
 
