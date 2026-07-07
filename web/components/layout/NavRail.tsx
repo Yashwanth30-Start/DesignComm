@@ -20,7 +20,7 @@ export function NavRail() {
     <nav className="fixed inset-y-0 left-0 z-40 hidden w-16 flex-col items-center gap-1 border-r border-glass-border bg-void/60 py-5 backdrop-blur-xs md:flex">
       <Link href="/" className="mb-4 h-7 w-7 rounded-md bg-gradient-to-br from-cyan via-purple to-emerald shadow-glow-cyan" />
       {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
-        const isActive = href ? (href === "/" ? pathname === "/" : pathname.startsWith(href)) : false;
+        const isActive = href ? pathname.startsWith(href) : false;
 
         if (!href) {
           return (
