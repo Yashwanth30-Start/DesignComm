@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Canvas } from "@react-three/fiber";
-import { BlackHole } from "./BlackHole";
+import { TesseractSwarm } from "./TesseractSwarm";
 
 const STORAGE_KEY = "cx-backdrop-opacity";
 const DEFAULT_OPACITY = 0.45;
@@ -36,13 +36,8 @@ export function GlobalBackdrop() {
     <>
       {mounted && opacity > 0 && (
         <div className="pointer-events-none fixed inset-0 -z-20" style={{ opacity }}>
-          <Canvas
-            dpr={[1, 1.5]}
-            gl={{ alpha: true, antialias: true }}
-            camera={{ position: [0, 2.2, 8.4], fov: 55 }}
-            onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
-          >
-            <BlackHole />
+          <Canvas dpr={[1, 1.5]} gl={{ alpha: true, antialias: true }} camera={{ position: [0, 0.6, 9], fov: 45 }}>
+            <TesseractSwarm />
           </Canvas>
         </div>
       )}
