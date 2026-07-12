@@ -1,0 +1,17 @@
+# Secrets — never commit
+.env
+.env.*
+
+# Scratch space for drafts
+.tmp/
+
+# Obsidian UI state (not business memory)
+.obsidian/
+
+# Raw exports may contain confidential real project data — keep them local.
+# Remove/adjust this if you keep the brain in a PRIVATE repo and want exports tracked.
+sources/*
+!sources/README.md
+
+# OS junk
+.DS_Store
