@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+
+# typescript
+tsconfig.tsbuildinfo
+
+# misc
+.DS_Store
+*.log
+.env*.local
