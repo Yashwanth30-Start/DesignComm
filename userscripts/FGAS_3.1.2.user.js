@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FG Automation Suite
 // @namespace    FG
-// @version      3.1.1
+// @version      3.1.2
 // @description  Merged build — v3.0 engine (editable questionnaire, checklist status, status/category/discipline patching) + v3.0.1 question-text extraction and grid-search asset resolution. Paste list is authoritative: commas/semicolons/newlines are separators, hyphens are part of asset names.
 // @match        https://burnsmcd.facilitygrid.net/*
 // @grant        none
@@ -1098,7 +1098,7 @@
                 <span style="display:flex;align-items:center;gap:8px;">
                     <span style="font-size:16px;">⚙</span>
                     FacilityGrid Automation Suite
-                    <span style="font-size:10px;opacity:.7;font-weight:normal;letter-spacing:1px;">v3.1.1</span>
+                    <span style="font-size:10px;opacity:.7;font-weight:normal;letter-spacing:1px;">v3.1.2</span>
                 </span>
                 <span style="display:flex;gap:10px;align-items:center;">
                     <button id="fg-max-toggle" type="button" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:bold;cursor:pointer;font-size:12px;padding:2px 8px;border-radius:3px;">[+]</button>
@@ -1371,7 +1371,7 @@
         };
 
         setTimeout(() => {
-            logTerminal('FG Automation Suite v3.1.1 online.', 'success');
+            logTerminal('FG Automation Suite v3.1.2 online.', 'success');
             const tok = getLiveToken();
             logTerminal(tok ? `Auto-token detected (length: ${tok.length}).` : 'No token yet — trigger any FG action.', tok ? 'success' : 'warn');
         }, 300);
@@ -1420,6 +1420,59 @@
         return dp[n];
     }
 
+    // Locate the jqGrid instance wherever it lives — FG often renders the
+    // equipment grid inside an iframe, so the top window's jQuery can't see it.
+    function findEquipmentGridApi() {
+        for (const ctx of getTargetContexts()) {
+            const view = ctx.defaultView;
+            const $ = view && (view.jQuery || view.$);
+            if (!$ || !$.fn || !$.fn.jqGrid) continue;
+            let $g = $('#eq_list', ctx);
+            if (!$g.length) $g = $('table.ui-jqgrid-btable', ctx).first();
+            if (!$g.length || typeof $g.jqGrid !== 'function') continue;
+            return { ctx, view, $, $g };
+        }
+        return null;
+    }
+
+    function gridReload(api) {
+        return new Promise(resolve => {
+            let done = false;
+            const finish = () => { if (!done) { done = true; resolve(); } };
+            api.$g.one('jqGridLoadComplete', finish);
+            try { api.$g.trigger('reloadGrid', [{ page: 1 }]); } catch (e) { finish(); }
+            setTimeout(finish, 6000); // safety timeout if the event never fires
+        });
+    }
+
+    // Clear a leftover Unit toolbar filter (e.g. from an earlier run's grid
+    // search) — a stale filter can leave the grid showing 0 rows, and every
+    // local match would then fail against an empty grid.
+    async function clearEquipmentUnitFilter() {
+        let hadFilter = false;
+        for (const ctx of getTargetContexts()) {
+            const inp = ctx.getElementById('gs_unit');
+            if (inp && inp.value) { inp.value = ''; hadFilter = true; }
+        }
+        const api = findEquipmentGridApi();
+        if (api) {
+            try {
+                const pd = api.$g.jqGrid('getGridParam', 'postData') || {};
+                if (pd.unit || pd.searchString || pd._search === true || pd._search === 'true') {
+                    delete pd.unit; delete pd.searchString; delete pd.searchField; delete pd.searchOper;
+                    pd._search = false;
+                    api.$g.jqGrid('setGridParam', { search: false, postData: pd });
+                    hadFilter = true;
+                }
+                if (hadFilter) {
+                    logTerminal('Clearing leftover equipment grid filter from a previous search…', 'info');
+                    await gridReload(api);
+                }
+            } catch (e) { /* grid not introspectable — the DOM input was still cleared */ }
+        }
+        return hadFilter;
+    }
+
     function collectGridRowText(ctxs) {
         // rows: id -> full lowercase row text (broad substring fallback)
         // units: [{id, raw, norm}] specific unit-identifier candidates, used for
@@ -1438,27 +1491,21 @@
         });
 
         try {
-            const $ = window.jQuery || window.$;
-            if ($ && $.fn && $.fn.jqGrid) {
-                const candidates = ['#eq_list', 'table.ui-jqgrid-btable'];
-                for (const sel of candidates) {
-                    const $g = $(sel).first();
-                    if (!$g.length || !$g.jqGrid) continue;
-                    let data;
-                    try { data = $g.jqGrid('getGridParam', 'data'); } catch (e) { continue; }
-                    if (Array.isArray(data) && data.length) {
-                        data.forEach(r => {
-                            if (r && r.id != null) {
-                                const id = String(r.id);
-                                if (!rows.has(id)) rows.set(id, Object.values(r).join(' ').toLowerCase());
-                                const unitVal = r.unit || r.Unit || r.unit_no || '';
-                                if (unitVal && !units.some(u => u.id === id)) {
-                                    units.push({ id, raw: String(unitVal), norm: normalizeId(unitVal) });
-                                }
+            const api = findEquipmentGridApi();
+            if (api) {
+                let data;
+                try { data = api.$g.jqGrid('getGridParam', 'data'); } catch (e) { data = null; }
+                if (Array.isArray(data) && data.length) {
+                    data.forEach(r => {
+                        if (r && r.id != null) {
+                            const id = String(r.id);
+                            if (!rows.has(id)) rows.set(id, Object.values(r).join(' ').toLowerCase());
+                            const unitVal = r.unit || r.Unit || r.unit_no || '';
+                            if (unitVal && !units.some(u => u.id === id)) {
+                                units.push({ id, raw: String(unitVal), norm: normalizeId(unitVal) });
                             }
-                        });
-                        break;
-                    }
+                        }
+                    });
                 }
             }
         } catch (e) { /* jqGrid not introspectable here — DOM scan above still applies */ }
@@ -1468,25 +1515,80 @@
 
     async function forceFullGridLoad() {
         try {
-            const $ = window.jQuery || window.$;
-            if (!$ || !$.fn || !$.fn.jqGrid) return false;
-            const $g = ($('#eq_list').length ? $('#eq_list') : $('table.ui-jqgrid-btable').first());
-            if (!$g.length || !$g.jqGrid) return false;
-            const current = parseInt($g.jqGrid('getGridParam', 'rowNum'), 10) || 0;
+            const api = findEquipmentGridApi();
+            if (!api) return false;
+            const current = parseInt(api.$g.jqGrid('getGridParam', 'rowNum'), 10) || 0;
             if (current >= 5000) return false; // already expanded, nothing more to do
             logTerminal('No match on current page — expanding grid to load the full equipment list...', 'warn');
-            await new Promise(resolve => {
-                let done = false;
-                const finish = () => { if (!done) { done = true; resolve(); } };
-                $g.one('jqGridLoadComplete', finish);
-                try {
-                    $g.jqGrid('setGridParam', { rowNum: 5000 });
-                    $g.trigger('reloadGrid', [{ page: 1 }]);
-                } catch (e) { finish(); }
-                setTimeout(finish, 6000); // safety timeout if the event never fires
-            });
+            try { api.$g.jqGrid('setGridParam', { rowNum: 5000 }); } catch (e) { return false; }
+            await gridReload(api);
             return true;
         } catch (e) { return false; }
+    }
+
+    // Server-side lookup — queries the grid's own data URL directly, so it
+    // works even when the on-screen grid is filtered, paged, or rendered in a
+    // frame the DOM scan can't usefully read.
+    async function fetchEquipmentRowsFromServer(token) {
+        const api = findEquipmentGridApi();
+        if (!api) return null;
+        let url, postData, prm, mtype;
+        try {
+            url      = api.$g.jqGrid('getGridParam', 'url');
+            postData = api.$g.jqGrid('getGridParam', 'postData') || {};
+            prm      = api.$g.jqGrid('getGridParam', 'prmNames') || {};
+            mtype    = (api.$g.jqGrid('getGridParam', 'mtype') || 'GET').toUpperCase();
+        } catch (e) { return null; }
+        if (!url) return null;
+
+        const params = new URLSearchParams();
+        Object.entries(postData).forEach(([k, v]) => {
+            if (v == null || typeof v === 'function') return;
+            if (['unit', 'searchString', 'searchField', 'searchOper', '_search'].includes(k)) return;
+            params.set(k, v);
+        });
+        params.set(prm.rows || 'rows', '200');
+        params.set(prm.page || 'page', '1');
+        params.set(prm.search || '_search', 'true');
+        params.set('searchField', 'unit');
+        params.set('searchOper', 'cn');
+        params.set('searchString', token);
+        params.set('unit', token); // FG's toolbar search posts the column name directly
+
+        try {
+            let r;
+            if (mtype === 'POST') {
+                r = await fetch(url, {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: params.toString()
+                });
+            } else {
+                const sep = url.includes('?') ? '&' : '?';
+                r = await fetch(url + sep + params.toString(), {
+                    credentials: 'include',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+            }
+            if (!r.ok) return null;
+            const data = await r.json().catch(() => null);
+            return data && Array.isArray(data.rows) ? data.rows : null;
+        } catch (e) { return null; }
+    }
+
+    // Pick the row for a token out of server rows: exact (punctuation-blind)
+    // cell match wins; a substring match only counts when it's unambiguous.
+    function findRowForToken(rowsArr, token) {
+        const normNeedle = normalizeId(token);
+        const needle = token.toLowerCase();
+        const partial = [];
+        for (const r of rowsArr) {
+            const cells = (r.cell || []).map(gridCellText);
+            if (cells.some(c => normalizeId(c) === normNeedle)) return String(r.id);
+            if (cells.some(c => c.toLowerCase().includes(needle))) partial.push(r);
+        }
+        if (partial.length === 1) return String(partial[0].id);
+        return null;
     }
 
     /* ----- live grid search (from 3.0.1) — last-resort tier for pasted
@@ -1566,8 +1668,12 @@
         if (!controls) return false;
 
         const previousSignature = getEquipmentGridSignature(ctxs);
-        const { searchInput, grid } = controls;
-        const jq = window.jQuery || window.$;
+        const { ctx, searchInput, grid } = controls;
+        // Use the jQuery of the frame the grid actually lives in — jqGrid's
+        // plugin data is invisible to the top window's jQuery when the grid
+        // renders inside an iframe.
+        const view = ctx.defaultView || window;
+        const jq = view.jQuery || view.$ || window.jQuery || window.$;
 
         searchInput.value = token;
         searchInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1660,8 +1766,15 @@
     }
 
     async function matchPastedIdentifiers(identifiers, ctxs) {
+        // A stale Unit filter from an earlier run leaves the grid empty and
+        // would fail every local match — reset it before collecting rows.
+        await clearEquipmentUnitFilter();
+
         let { rows, units } = collectGridRowText(ctxs);
         logTerminal(`Searching ${rows.size} loaded asset row(s) for ${identifiers.length} pasted identifier(s)...`, 'info');
+        if (!rows.size) {
+            logTerminal('0 equipment rows readable in the page — falling back to server-side lookups.', 'warn');
+        }
 
         const tryMatchAll = () => {
             const pids = [], matched = [], fuzzyMatched = [], unmatched = [];
@@ -1695,11 +1808,35 @@
             }
         }
 
-        // Tier 4b — live server-side grid search per remaining token (from 3.0.1)
+        // Tier 4b — server-side lookup via the grid's own data URL. This is
+        // the most reliable path: it doesn't care what the on-screen grid is
+        // currently showing.
         if (result.unmatched.length) {
             const stillUnmatched = [];
             for (const token of result.unmatched) {
-                logTerminal(`Searching equipment grid for pasted asset: ${token}`, 'info');
+                logTerminal(`Querying server for pasted asset: ${token}`, 'info');
+                const serverRows = await fetchEquipmentRowsFromServer(token);
+                if (serverRows && serverRows.length) {
+                    const hitId = findRowForToken(serverRows, token);
+                    if (hitId) {
+                        result.pids.push(hitId);
+                        result.matched.push(token);
+                        logTerminal(`Server lookup resolved ${token} → asset ID ${hitId}.`, 'success');
+                        continue;
+                    }
+                    logTerminal(`Server returned ${serverRows.length} row(s) for "${token}" but none matched it exactly.`, 'warn');
+                }
+                stillUnmatched.push(token);
+            }
+            result.unmatched = stillUnmatched;
+        }
+
+        // Tier 4c — last resort: drive the on-page Unit filter search (from
+        // 3.0.1), then restore the grid afterwards so no filter is left behind.
+        if (result.unmatched.length) {
+            const stillUnmatched = [];
+            for (const token of result.unmatched) {
+                logTerminal(`Searching on-page equipment grid for pasted asset: ${token}`, 'info');
                 const searched = await searchEquipmentGridByUnit(token, ctxs);
                 if (searched) {
                     ({ rows, units } = collectGridRowText(ctxs));
@@ -1713,6 +1850,7 @@
                 stillUnmatched.push(token);
             }
             result.unmatched = stillUnmatched;
+            await clearEquipmentUnitFilter(); // never leave the grid filtered behind us
         }
 
         const totalMatched = result.matched.length + result.fuzzyMatched.length;
