@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FG Automation Suite
 // @namespace    FG
-// @version      3.1.0
-// @description  Merged build — v3.0 engine (editable questionnaire, checklist status, status/category/discipline patching) + v3.0.1 question-text extraction and grid-search asset resolution.
+// @version      3.1.1
+// @description  Merged build — v3.0 engine (editable questionnaire, checklist status, status/category/discipline patching) + v3.0.1 question-text extraction and grid-search asset resolution. Paste list is authoritative: commas/semicolons/newlines are separators, hyphens are part of asset names.
 // @match        https://burnsmcd.facilitygrid.net/*
 // @grant        none
 // @run-at       document-idle
@@ -1098,7 +1098,7 @@
                 <span style="display:flex;align-items:center;gap:8px;">
                     <span style="font-size:16px;">⚙</span>
                     FacilityGrid Automation Suite
-                    <span style="font-size:10px;opacity:.7;font-weight:normal;letter-spacing:1px;">v3.1.0</span>
+                    <span style="font-size:10px;opacity:.7;font-weight:normal;letter-spacing:1px;">v3.1.1</span>
                 </span>
                 <span style="display:flex;gap:10px;align-items:center;">
                     <button id="fg-max-toggle" type="button" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:bold;cursor:pointer;font-size:12px;padding:2px 8px;border-radius:3px;">[+]</button>
@@ -1122,7 +1122,7 @@
                     <span id="fg-airtable-status" style="font-size:11px;color:#888;"></span>
                 </div>
                 <div id="fg-airtable-drawer" style="display:none;flex-direction:column;gap:6px;margin-bottom:8px;padding:8px;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:4px;flex-shrink:0;">
-                    <span style="font-size:11px;color:#555;">Paste rows copied from Airtable (asset name/ID in the first column, one per line). Run Asset Audit will match these against the on-page grid — unmatched entries are searched live through the equipment grid's Unit filter. Leave empty to use the native manual-select workflow.</span>
+                    <span style="font-size:11px;color:#555;">Paste asset names/IDs separated by commas, semicolons, or line breaks — separators are never counted as assets, and hyphens inside a name (e.g. KSPA1W2-RTU-109-101) are kept. While the box has data, Run Asset Audit scans EXACTLY these assets and ignores grid checkboxes; unmatched entries are searched live through the equipment grid's Unit filter. Clear the box to use manual grid selection.</span>
                     <textarea id="fg-airtable-paste" rows="4" placeholder="AHU-1&#10;P-101&#10;CB-22..." style="width:100%;box-sizing:border-box;font-size:11px;font-family:'Courier New',monospace;padding:6px;border:1px solid #ccc;border-radius:4px;resize:vertical;"></textarea>
                     <div style="display:flex;gap:6px;">
                         <button id="fg-airtable-clear" type="button" style="${ghostBtnStyle()}">Clear Pasted Data</button>
@@ -1371,7 +1371,7 @@
         };
 
         setTimeout(() => {
-            logTerminal('FG Automation Suite v3.1.0 online.', 'success');
+            logTerminal('FG Automation Suite v3.1.1 online.', 'success');
             const tok = getLiveToken();
             logTerminal(tok ? `Auto-token detected (length: ${tok.length}).` : 'No token yet — trigger any FG action.', tok ? 'success' : 'warn');
         }, 300);
@@ -1601,52 +1601,59 @@
         return true;
     }
 
-    function markAssetChecked(pid, ctxs) {
-        ctxs.forEach(ctx => {
-            const checkbox = ctx.getElementById(`jqg_eq_list_${pid}`) || ctx.querySelector(`input.cbox[id$="_${pid}"]`);
-            if (checkbox) {
-                checkbox.checked = true;
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        });
-    }
-
     function getPastedIdentifiers() {
         const ta = document.getElementById('fg-airtable-paste');
         const raw = (ta?.value || '').trim();
         if (!raw) return null; // no paste data → caller falls back to native checkbox mode
-        const identifiers = raw.split(/[;\r\n]+/)
-            .map(line => (line.split('\t')[0] || line.split(',')[0] || line).trim())
-            .filter(Boolean);
+        // Commas, semicolons, tabs and newlines are SEPARATORS — never part of
+        // an asset name and never counted as an asset. Hyphens and dots inside
+        // a name are kept: "KSPA1W2-RTU-109-101" is exactly one asset.
+        const seen = new Set();
+        const identifiers = [];
+        raw.split(/[\t,;\r\n]+/).forEach(part => {
+            const token = part.trim().replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+            if (!token) return;
+            const key = normalizeId(token);
+            if (!key || seen.has(key)) return; // punctuation-only or duplicate entry
+            seen.add(key);
+            identifiers.push(token);
+        });
         return identifiers.length ? identifiers : null;
     }
 
-    // Single-identifier matcher — exact substring, punctuation-normalized, then fuzzy
+    // Single-identifier matcher — exact unit match, then substring, then fuzzy
     function matchOneIdentifier(idStr, rows, units) {
         const needle = idStr.toLowerCase();
         const normNeedle = normalizeId(idStr);
 
-        // Tier 1 — exact substring on raw row text (fast path, no typos)
+        // Tier 1 — exact match on the Unit column ignoring punctuation/case
+        // (missing or extra hyphens, dots, spaces — e.g. "OHD10D620.01C" vs
+        // "OHD-10D620.01C"). Checked first so a description cell that merely
+        // mentions the asset can't hijack the match.
+        const u1 = units.find(u => u.norm === normNeedle);
+        if (u1) return { hitId: u1.id, fuzzy: false };
+
+        // Tier 2 — exact substring on raw row text (covers IDs shown in
+        // columns other than Unit)
         for (const [rid, text] of rows) {
             if (text.includes(needle)) return { hitId: rid, fuzzy: false };
         }
 
-        // Tier 2 — exact match ignoring punctuation/case (missing or extra
-        // hyphens, dots, spaces — e.g. "OHD10D620.01C" vs "OHD-10D620.01C")
-        const u2 = units.find(u => u.norm === normNeedle);
-        if (u2) return { hitId: u2.id, fuzzy: false };
-
         // Tier 3 — fuzzy match via edit distance, for genuine character-level
-        // typos. Threshold scales with identifier length, capped small so it
-        // doesn't start guessing wildly on short codes.
+        // typos. Only accepted when there is a single unambiguous winner:
+        // sibling assets often differ by one character (…-101 vs …-102), and a
+        // tie there would mean guessing at the wrong asset.
         if (units.length && normNeedle.length >= 4) {
-            let best = null, bestDist = Infinity;
+            const threshold = Math.min(3, Math.max(1, Math.ceil(normNeedle.length * 0.12)));
+            let bestDist = Infinity;
+            const withinThreshold = [];
             for (const u of units) {
                 const d = levenshtein(normNeedle, u.norm);
-                if (d < bestDist) { bestDist = d; best = u; }
+                if (d <= threshold) withinThreshold.push({ u, d });
+                if (d < bestDist) bestDist = d;
             }
-            const threshold = Math.min(3, Math.max(1, Math.ceil(normNeedle.length * 0.12)));
-            if (best && bestDist <= threshold) return { hitId: best.id, fuzzy: true };
+            const winners = withinThreshold.filter(x => x.d === bestDist);
+            if (winners.length === 1) return { hitId: winners[0].u.id, fuzzy: true };
         }
 
         return { hitId: null, fuzzy: false };
@@ -1700,7 +1707,6 @@
                     if (hitId) {
                         result.pids.push(hitId);
                         if (fuzzy) result.fuzzyMatched.push(token); else result.matched.push(token);
-                        markAssetChecked(hitId, ctxs);
                         continue;
                     }
                 }
@@ -1725,28 +1731,30 @@
     async function executeAuditScan() {
         const ctxs = getTargetContexts();
 
-        // Native checkbox selection — always collected, regardless of paste state.
-        let checked = [];
-        ctxs.forEach(ctx => {
-            checked = checked.concat([...ctx.querySelectorAll('input.cbox:checked, .jqgrow input[type="checkbox"]:checked')]);
-        });
-        const nativePids = checked.map(cb => cb.id.replace('jqg_eq_list_', '').replace('jqg_', ''));
-
-        // Pasted identifiers — optional, resolved on top of native selection.
+        // Pasted identifiers take priority: when the paste box has data, the
+        // audit scans EXACTLY those assets and ignores grid checkboxes, so a
+        // stale select-all or leftover checks can never inflate the count.
         const pastedIdentifiers = getPastedIdentifiers();
-        let pastedPids = [];
+        let pids = [];
+
         if (pastedIdentifiers && pastedIdentifiers.length) {
-            pastedPids = await matchPastedIdentifiers(pastedIdentifiers, ctxs);
-        }
-
-        const pids = [...new Set([...nativePids, ...pastedPids])];
-
-        if (nativePids.length && pastedPids.length) {
-            logTerminal(`Combining ${nativePids.length} natively-checked asset(s) with ${pastedPids.length} paste-matched asset(s) → ${pids.length} unique asset(s) total.`, 'info');
-        } else if (pastedPids.length) {
-            logTerminal(`Using ${pastedPids.length} asset(s) resolved from paste.`, 'info');
-        } else if (nativePids.length) {
-            logTerminal(`Using ${nativePids.length} natively-checked asset(s).`, 'info');
+            logTerminal(`Parsed ${pastedIdentifiers.length} pasted asset name(s): ${pastedIdentifiers.join(', ')}`, 'info');
+            pids = await matchPastedIdentifiers(pastedIdentifiers, ctxs);
+            logTerminal(`Paste mode active — grid checkboxes ignored. Scanning ${pids.length} pasted asset(s). Clear the paste box to use manual grid selection.`, 'info');
+        } else {
+            // Native checkbox mode — jqGrid row-select boxes only. The pid must
+            // be the numeric row id; this excludes the select-all header box and
+            // any checkbox that lives inside a data cell.
+            let checked = [];
+            ctxs.forEach(ctx => {
+                checked = checked.concat([...ctx.querySelectorAll('input.cbox:checked')]);
+            });
+            pids = [...new Set(
+                checked
+                    .map(cb => (cb.id || '').replace('jqg_eq_list_', '').replace('jqg_', ''))
+                    .filter(pid => /^\d+$/.test(pid))
+            )];
+            if (pids.length) logTerminal(`Using ${pids.length} asset(s) checked on the grid.`, 'info');
         }
 
         if (!pids.length) {
