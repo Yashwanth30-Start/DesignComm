@@ -10,6 +10,8 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Raaga Live" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%234aa8ff'/%3E%3Cstop offset='1' stop-color='%23ff4d8d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%23070a12'/%3E%3Cpath d='M6 36 Q12 22 18 34 T30 30 Q34 14 38 32 T50 34 Q54 26 58 33' fill='none' stroke='url(%23g)' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -297,6 +299,7 @@
     <div class="heroBtns">
       <button class="cta" id="enterLive">● Start Listening</button>
       <button class="cta ghost" id="enterPlayer">▸ Open Player</button>
+      <button class="cta ghost" id="installbtn" style="display:none">⤓ Install App</button>
     </div>
     <div class="heroHint">swipe of sound · te → en</div>
   </div>
@@ -353,7 +356,7 @@
 
   <!-- PLAYER VIEW -->
   <section class="view" id="playerview">
-    <div class="deck glass">
+    <div class="deck glass" id="deck" style="will-change:transform">
       <div class="screws"><i></i><i></i><i></i><i></i></div>
       <div class="tapetop"><span class="lbl">raaga · deck 01</span><span class="lbl" id="tapetime">00:00</span></div>
       <div class="reels">
@@ -422,6 +425,10 @@ const HISTORY_KEY = "raaga-live-history-v1";
 const TOKEN_KEY = "raaga-audd-token";
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+// Chrome/Firefox/Edge on iOS are WebKit shells where Apple removes the
+// SpeechRecognition API entirely — only real Safari has it.
+const IS_IOS_ALT_BROWSER = IS_IOS && /CriOS|FxiOS|EdgiOS|OPiOS|Brave/i.test(navigator.userAgent);
+const IS_STANDALONE = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 
 let lines = [];
 let interimText = "", interimEn = "";
@@ -432,6 +439,7 @@ let audioCtx = null, analyser = null, elementSrc = null, micSrc = null;
 const bands = new Float32Array(5);
 let energy = 0;                 // 0..1 overall, drives ring/reels
 let lastVoiceBump = 0;
+let tiltX = 0, tiltY = 0, rawTX = 0, rawTY = 0;   // device/pointer parallax
 const cache = new Map();
 
 const $ = (id) => document.getElementById(id);
@@ -620,7 +628,9 @@ function spinUp() {
   try { rec = new SR(); } catch (e) { listening = false; setStatus("no asr", "Speech recognition failed to start in this browser."); return; }
   recognition = rec;
   rec.lang = "te-IN";
-  rec.continuous = !IS_IOS ? true : true; // iOS honors it loosely; onend re-arms either way
+  // iOS Safari's continuous mode is broken (sessions die and never restart
+  // cleanly) — short sessions re-armed from onend are far more reliable.
+  rec.continuous = !IS_IOS;
   rec.interimResults = true;
   rec.maxAlternatives = 1;
 
@@ -646,6 +656,10 @@ function spinUp() {
       listening = false;
       setStatus("mic busy", "The microphone is in use by another app. Close it and try again.");
       detachMicAnalyser();
+    } else if (event.error === "language-not-supported") {
+      listening = false;
+      setStatus("no telugu", "This device's speech engine doesn't have Telugu yet. iPhone: Settings → General → Keyboard → add the Telugu keyboard and enable Dictation, then reload. The song identifier and player still work.");
+      detachMicAnalyser();
     }
   };
   rec.onend = () => { if (listening) setTimeout(() => { try { spinUp(); } catch (e) {} }, IS_IOS ? 60 : 250); };
@@ -669,8 +683,12 @@ document.addEventListener("visibilitychange", () => {
 
 function startListening() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (IS_IOS_ALT_BROWSER || (!SR && IS_IOS)) {
+    setStatus("no asr", "On iPhone, only the real Safari app can do live speech recognition — Apple removes it from Chrome and other browsers. Open this site in Safari (and enable Siri & Dictation in Settings). The song identifier and player work right here though.");
+    return;
+  }
   if (!SR) {
-    setStatus("no asr", "This browser has no live speech recognition. On iPhone use Safari 14.5+; on Android use Chrome. You can still paste Telugu lyrics below, or use the Shazam-style identify button.");
+    setStatus("no asr", "This browser has no live speech recognition — on Android use Chrome. You can still paste Telugu lyrics below, or use the Shazam-style identify button.");
     $("pastebox").classList.add("open");
     $("togglepaste").textContent = "hide paste box";
     return;
@@ -952,6 +970,10 @@ sizeTape(); window.addEventListener("resize", sizeTape);
 (function reelLoop() {
   const speed = isPlaying ? 1.4 + energy * 7 : (listening ? 0.4 + energy * 3 : 0.15);
   reelAngle = (reelAngle + speed) % 360;
+  // rhythm-reactive 3D tilt on the whole cassette deck
+  $("deck").style.transform =
+    "perspective(1100px) rotateX(" + (1.5 + energy * 4 + tiltY * 0.25) + "deg)" +
+    " rotateY(" + (tiltX * 0.3) + "deg) scale(" + (1 + energy * 0.015) + ")";
   $("reelL").style.transform = "rotate(" + reelAngle + "deg)";
   $("reelR").style.transform = "rotate(" + (-reelAngle * 0.85) + "deg)";
   // tape window bars
@@ -1094,12 +1116,37 @@ function buildRing() {
 buildRing();
 window.addEventListener("resize", buildRing);
 
+/* -------- device-tilt / pointer parallax (3D depth on real motion) -------- */
+window.addEventListener("mousemove", (e) => {
+  rawTX = ((e.clientX / innerWidth) - 0.5) * 16;
+  rawTY = ((e.clientY / innerHeight) - 0.5) * -10;
+});
+function hookGyro() {
+  const handler = (e) => {
+    if (e.gamma == null) return;
+    rawTX = Math.max(-18, Math.min(18, e.gamma * 0.55));
+    rawTY = Math.max(-12, Math.min(12, (e.beta - 45) * -0.3));
+  };
+  try {
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      DeviceOrientationEvent.requestPermission()
+        .then((s) => { if (s === "granted") window.addEventListener("deviceorientation", handler); })
+        .catch(() => {});
+    } else if ("DeviceOrientationEvent" in window) {
+      window.addEventListener("deviceorientation", handler);
+    }
+  } catch (e) {}
+}
+
 let ringRot = 0;
 const heroEl = $("hero");
 (function ringLoop() {
+  tiltX += (rawTX - tiltX) * 0.06;
+  tiltY += (rawTY - tiltY) * 0.06;
   if (!heroEl.classList.contains("gone")) {
     ringRot += 0.12 + energy * 1.35;   // music makes the dome spin faster
     const wob = Math.sin(performance.now() / 2600) * 4;
+    ring.style.transform = "rotateX(" + (tiltY * 0.9 - 3) + "deg) rotateY(" + (tiltX * 0.9) + "deg)";
     for (const c of ringCards) {
       const a = (c.base + ringRot) % 360;
       const rad = (a * Math.PI) / 180;
@@ -1159,8 +1206,37 @@ function enterApp(view) {
     anime({ targets: "#app .appbar, #app .view.on > *", translateY: [18, 0], opacity: [0, 1], delay: anime.stagger(60), duration: 650, easing: "easeOutExpo" });
   }
 }
-$("enterLive").addEventListener("click", () => { enterApp("live"); startListening(); });
-$("enterPlayer").addEventListener("click", () => enterApp("player"));
+$("enterLive").addEventListener("click", () => { hookGyro(); enterApp("live"); startListening(); });
+$("enterPlayer").addEventListener("click", () => { hookGyro(); enterApp("player"); });
+
+/* ============================ INSTALL AS APP ============================ */
+let deferredInstall = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  $("installbtn").style.display = "";
+});
+if (IS_IOS && !IS_STANDALONE) $("installbtn").style.display = "";
+$("installbtn").addEventListener("click", async () => {
+  if (deferredInstall) {
+    deferredInstall.prompt();
+    const choice = await deferredInstall.userChoice.catch(() => null);
+    if (choice && choice.outcome === "accepted") { $("installbtn").style.display = "none"; toast("Installing… check your home screen"); }
+    deferredInstall = null;
+  } else if (IS_IOS) {
+    toast(IS_IOS_ALT_BROWSER
+      ? "Open this site in Safari first, then Share → Add to Home Screen"
+      : "Tap the Share button ⬆ below, then 'Add to Home Screen'");
+  } else {
+    toast("Use your browser's menu → 'Install app' / 'Add to Home screen'");
+  }
+});
+window.addEventListener("appinstalled", () => { $("installbtn").style.display = "none"; toast("Raaga Live installed 🎉"); });
+
+/* service worker: instant loads + offline shell (needs HTTPS, e.g. Netlify) */
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 
 /* hero entrance */
 window.addEventListener("load", () => {
