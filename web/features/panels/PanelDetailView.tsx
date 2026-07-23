@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link2 } from "lucide-react";
 
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-import { GlassPanel, SectionHeading, StatusPill, PanelSchedule, type LinkedAsset } from "@/components/ui";
+import { GlassPanel, SectionHeading, StatusPill } from "@/components/ui";
 import type { Asset, PanelScheduleData } from "@/types/domain";
+import { useProjectData } from "@/features/data/DataProvider";
+import { PANEL_SOURCE } from "@/features/data/sources";
+import { boardFromMock, boardFromRecords } from "./panel-board";
+import { EnergizedPanelBoard } from "./EnergizedPanelBoard";
 
 export function PanelDetailView({
   schedule,
@@ -17,30 +21,41 @@ export function PanelDetailView({
   assetsOnPanel: Asset[];
   highlightCircuit?: string;
 }) {
-  const linkedAssets = assetsOnPanel.reduce<Record<string, LinkedAsset>>((map, asset) => {
-    map[asset.circuit] = { id: asset.id, name: asset.name, status: asset.status };
-    return map;
-  }, {});
+  const { records } = useProjectData();
+
+  // Live imported SharePoint circuits for this panel win; the mock fixture is
+  // the fallback so the page still demos without Connect data.
+  const liveCircuits = useMemo(
+    () =>
+      boardFromRecords(
+        records.filter(
+          (record) =>
+            record.source === PANEL_SOURCE &&
+            record.recordType === "panel_circuit" &&
+            record.panelKeys.includes(schedule.panelId)
+        )
+      ),
+    [records, schedule.panelId]
+  );
+  const live = liveCircuits.length > 0;
+  const circuits = live ? liveCircuits : boardFromMock(schedule);
 
   useEffect(() => {
     if (!highlightCircuit) return;
-    document.getElementById(`ckt-${highlightCircuit}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById(`ckt-${Number(highlightCircuit)}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlightCircuit]);
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10">
+    <div className="mx-auto max-w-6xl px-6 py-10">
       <Reveal>
-        <div className="mb-2 text-xs uppercase tracking-widest text-ink-dim">Panel</div>
-        <h1 className="text-4xl font-semibold tracking-tight text-ink">{schedule.panelName}</h1>
-        <p className="mt-2 text-sm text-ink-dim">{schedule.panelId}</p>
-      </Reveal>
-
-      <Reveal delay={0.1}>
-        <PanelSchedule
-          schedule={schedule}
+        <EnergizedPanelBoard
+          panelId={schedule.panelId}
+          circuits={circuits}
+          live={live}
+          scheduleName={schedule.scheduleName}
+          permitNumber={schedule.permitNumber}
+          fedBy={schedule.fedBy}
           highlightCircuit={highlightCircuit}
-          linkedAssets={linkedAssets}
-          className="mt-10"
         />
       </Reveal>
 

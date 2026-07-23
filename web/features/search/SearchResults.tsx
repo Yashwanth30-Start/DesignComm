@@ -15,39 +15,23 @@ import {
   Clock,
 } from "lucide-react";
 
-import { GlassPanel, SectionHeading, StatusPill, Tag, PanelSchedule } from "@/components/ui";
+import { GlassPanel, SectionHeading, StatusPill, Tag } from "@/components/ui";
 import type { Asset, NormalizedRecord } from "@/types/domain";
 import { useProjectData } from "@/features/data/DataProvider";
 import { FacilityGridCard } from "@/features/assets/FacilityGridCard";
+import { PANEL_SOURCE, SOURCES, recordHaystack, sourceLabel } from "@/features/data/sources";
+import { EnergizedPanelBoard } from "@/features/panels/EnergizedPanelBoard";
+import { boardFromMock, boardFromRecords, type BoardCircuit } from "@/features/panels/panel-board";
 import { MOCK_ASSETS, WING2_AREAS, getPanelSchedule, getAssetsByPanel } from "@/lib/mock-data";
 import { recordDate, formatDate, parseDateValue } from "@/lib/dates";
-import { LivePanelSchedule, type LiveCircuit } from "./LivePanelSchedule";
 import { SearchVisualization } from "./SearchVisualization";
 import { cn } from "@/utils/cn";
 
-// Source names must exactly match the pipeline output source strings.
-const SOURCES: { id: string; label: string; source: string }[] = [
-  { id: "airtable", label: "Airtable", source: "Airtable Commissioning Tracker" },
-  { id: "groupme", label: "GroupMe", source: "GroupMe" },
-  { id: "rfis", label: "RFIs", source: "Procore RFI Log" },
-  { id: "constraints", label: "Constraints", source: "Cx Constraint Log" },
-  { id: "mel", label: "MEL", source: "MEL Master Equipment List" },
-  { id: "fa", label: "FA Testing", source: "W2 FA Testing Tracker" },
-];
-
-const PANEL_SOURCE = "SharePoint Panel Schedules";
 const EVIDENCE_PREVIEW = 4;
 
 interface Hit {
   record: NormalizedRecord;
   date: number;
-}
-
-function recordHaystack(record: NormalizedRecord): string {
-  return (
-    record.searchText ??
-    `${record.primaryLabel} ${record.secondaryLabel ?? ""} ${record.status ?? ""} ${record.area ?? ""} ${record.location ?? ""} ${record.trade ?? ""}`.toLowerCase()
-  );
 }
 
 function hitKey(record: NormalizedRecord): string {
@@ -253,21 +237,10 @@ export function SearchResults() {
 
   const { q, buckets, panelCircuits, totalMatches, energized, openConstraints, focus, topHits } = model;
 
-  // Live circuits for a given panel id, deduped by circuit number.
-  function liveCircuitsFor(panelId: string): LiveCircuit[] {
+  // Live circuits for a given panel id, normalized into board shape.
+  function liveCircuitsFor(panelId: string): BoardCircuit[] {
     const hits = panelCircuits.get(panelId) ?? [];
-    const map = new Map<number, LiveCircuit>();
-    for (const hit of hits) {
-      const raw = (hit.record.raw ?? {}) as Record<string, unknown>;
-      const num = Number(raw.circuit ?? hit.record.circuitKeys.find((k) => k.length > 0));
-      if (!Number.isFinite(num) || map.has(num)) continue;
-      map.set(num, {
-        circuit: num,
-        breaker: typeof raw.breaker === "string" ? raw.breaker : undefined,
-        downstream: typeof raw.downstream === "string" ? raw.downstream : undefined,
-      });
-    }
-    return [...map.values()];
+    return boardFromRecords(hits.map((hit) => hit.record));
   }
 
   const statusChips = q.length > 0 && (
@@ -384,11 +357,13 @@ function AssetFocus({
 }: {
   asset: Asset;
   energizedLabel: string | null;
-  liveCircuits: LiveCircuit[];
+  liveCircuits: BoardCircuit[];
   highlight: string;
 }) {
   const mockSchedule = getPanelSchedule(asset.panel);
   const openConstraints = asset.constraints.filter((c) => c.status === "open");
+  const live = liveCircuits.length > 0;
+  const boardCircuits = live ? liveCircuits : mockSchedule ? boardFromMock(mockSchedule) : [];
 
   return (
     <section className="mt-8">
@@ -473,18 +448,15 @@ function AssetFocus({
         <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-dim">
           <Boxes className="h-3.5 w-3.5 text-purple" /> Feeding panel · {asset.panel}
         </div>
-        {liveCircuits.length > 0 ? (
-          <LivePanelSchedule
+        {boardCircuits.length > 0 ? (
+          <EnergizedPanelBoard
             panelId={asset.panel}
-            circuits={liveCircuits}
+            circuits={boardCircuits}
+            live={live}
+            scheduleName={live ? undefined : mockSchedule?.scheduleName}
+            permitNumber={live ? undefined : mockSchedule?.permitNumber}
             highlightText={asset.name.toLowerCase() !== highlight.toLowerCase() ? highlight : asset.name}
-            energized={energizedLabel !== null}
-          />
-        ) : mockSchedule ? (
-          <PanelSchedule
-            schedule={mockSchedule}
             highlightCircuit={asset.circuit}
-            linkedAssets={{ [asset.circuit]: { id: asset.id, name: asset.name, status: asset.status } }}
           />
         ) : (
           <GlassPanel className="p-4 text-[11px] text-ink-dim">
@@ -503,13 +475,15 @@ function PanelFocus({
   highlight,
 }: {
   panelId: string;
-  liveCircuits: LiveCircuit[];
+  liveCircuits: BoardCircuit[];
   energized: boolean;
   highlight: string;
 }) {
   const mockSchedule = getPanelSchedule(panelId);
   const fedAssets = getAssetsByPanel(panelId);
   const anchor = fedAssets.find((a) => a.circuit === "Main") ?? fedAssets.find(() => true);
+  const live = liveCircuits.length > 0;
+  const boardCircuits = live ? liveCircuits : mockSchedule ? boardFromMock(mockSchedule) : [];
 
   return (
     <section className="mt-8">
@@ -543,10 +517,15 @@ function PanelFocus({
       </GlassPanel>
 
       <div className="mt-4">
-        {liveCircuits.length > 0 ? (
-          <LivePanelSchedule panelId={panelId} circuits={liveCircuits} highlightText={highlight} energized={energized} />
-        ) : mockSchedule ? (
-          <PanelSchedule schedule={mockSchedule} />
+        {boardCircuits.length > 0 ? (
+          <EnergizedPanelBoard
+            panelId={panelId}
+            circuits={boardCircuits}
+            live={live}
+            scheduleName={live ? undefined : mockSchedule?.scheduleName}
+            permitNumber={live ? undefined : mockSchedule?.permitNumber}
+            highlightText={highlight}
+          />
         ) : (
           <GlassPanel className="p-4 text-[11px] text-ink-dim">
             No schedule on file for {panelId} — import panel-schedules.json via Connect data.
@@ -703,10 +682,6 @@ function CircuitFocus({
       </GlassPanel>
     </section>
   );
-}
-
-function sourceLabel(source: string): string {
-  return SOURCES.find((s) => s.source === source)?.label ?? source;
 }
 
 // Focused card synthesized from a live imported record — the answer when the

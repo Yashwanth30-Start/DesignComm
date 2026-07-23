@@ -301,6 +301,34 @@ export function getAssetById(id: string): Asset | undefined {
 
 export const MOCK_PANEL_SCHEDULES: PanelScheduleData[] = [
   {
+    // Demo fixture mirroring the PJKS Energized Circuits reference screen:
+    // two-bank breaker layout, a 3-pole 125A sub-feed on ckts 2/4/6, and a mix
+    // of Energized / Future / BLANK positions.
+    panelId: "KSPA1W2-8J1-1A3-GE2-2A",
+    panelName: "8J1-1A3-GE2-2A",
+    permitNumber: "2248",
+    scheduleName: "GE2-56 (2)",
+    circuits: [
+      { circuit: "1", description: "KSPA1W2-FSD-01", load: "20A", status: "future" },
+      { circuit: "2", description: "KSPA1W2-8J1-1A3-GE2-2B", load: "125A", status: "energized" },
+      { circuit: "3", description: "KSPA1W2-FSD-02", load: "20A", status: "energized" },
+      { circuit: "4", description: "KSPA1W2-8J1-1A3-GE2-2B", load: "125A", status: "energized" },
+      { circuit: "5", description: "KSPA1W2-FSD-03", load: "20A", status: "future" },
+      { circuit: "6", description: "KSPA1W2-8J1-1A3-GE2-2B", load: "125A", status: "energized" },
+      { circuit: "7", description: "KSPA1W2-FSD-36/37", load: "20A", status: "future" },
+      { circuit: "8", description: "BLANK", load: "", status: "blank" },
+      { circuit: "9", description: "KSPA1W2-FSD-39", load: "20A", status: "energized" },
+      { circuit: "10", description: "BLANK", load: "", status: "blank" },
+      { circuit: "11", description: "BLANK", load: "", status: "blank" },
+      { circuit: "12", description: "BLANK", load: "", status: "blank" },
+      { circuit: "13", description: "BLANK", load: "", status: "blank" },
+      { circuit: "14", description: "BLANK", load: "", status: "blank" },
+      { circuit: "15", description: "BLANK", load: "", status: "blank" },
+      { circuit: "16", description: "BLANK", load: "", status: "blank" },
+      { circuit: "17", description: "BLANK", load: "", status: "blank" },
+    ],
+  },
+  {
     panelId: "KSPA1W2-3B1-2A3",
     panelName: "PNL-B600-04",
     circuits: [

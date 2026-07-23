@@ -19,7 +19,13 @@ export interface TimelineStage {
   note?: string;
 }
 
-export type CircuitStatus = "energized" | "de-energized" | "blocked" | "spare";
+export type CircuitStatus =
+  | "energized"
+  | "de-energized"
+  | "blocked"
+  | "spare"
+  | "future"
+  | "blank";
 
 export interface PanelCircuitRow {
   circuit: string;
@@ -32,6 +38,12 @@ export interface PanelScheduleData {
   panelId: string;
   panelName: string;
   circuits: PanelCircuitRow[];
+  /** Permit number as tracked in the source system (e.g. FacilityGrid/SharePoint). */
+  permitNumber?: string;
+  /** Upstream feed, when known. */
+  fedBy?: string;
+  /** Source schedule label, e.g. "GE2-56 (2)". */
+  scheduleName?: string;
 }
 
 export type IntegrationSourceId =

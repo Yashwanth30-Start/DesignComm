@@ -11,6 +11,8 @@ const STATUS_CONFIG: Record<CircuitStatus, { label: string; dot: string; text: s
   "de-energized": { label: "De-energized", dot: "bg-gold", text: "text-gold" },
   blocked: { label: "Blocked", dot: "bg-red", text: "text-red" },
   spare: { label: "Spare", dot: "bg-ink-dim2", text: "text-ink-dim" },
+  future: { label: "Future", dot: "bg-purple", text: "text-purple" },
+  blank: { label: "Blank", dot: "bg-ink-dim2", text: "text-ink-dim2" },
 };
 
 export interface LinkedAsset {

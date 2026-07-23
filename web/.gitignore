@@ -1,0 +1,11 @@
+# Dependencies + build output (rebuilt on Netlify; never committed)
+node_modules/
+.next/
+out/
+
+# Secrets
+.env
+.env.*
+
+# OS junk
+.DS_Store
